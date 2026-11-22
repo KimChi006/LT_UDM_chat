@@ -9,12 +9,13 @@ Git + GitHub
 --------------------------------------------------------------------------------
 
 Thành viên 1 - SERVER CORE
+
 Thư mục phụ trách
-src/server
-File
-ServerMain.java
-ClientHandler.java
-MessageRouter.java
+- src/server
+- File
++ ServerMain.java
++ ClientHandler.java
++ MessageRouter.java
 
 Nhiệm vụ
 Khởi tạo Server Socket.
@@ -32,18 +33,18 @@ Các module khác có thể gửi packet thông qua Server.
 --------------------------------------------------------------------------------
 
 Thành viên 2 - CHAT & GROUP CHAT
-Thư mục phụ trách
-src/chat
-src/group
-File
-ChatUI.java
-ClientSocket.java
-MessageListener.java
-Message.java
 
-Group.java
-GroupManager.java
-GroupChatUI.java
+Thư mục phụ trách
+- src/chat
+- src/group
+- File
++ ChatUI.java
++ ClientSocket.java
++ MessageListener.java
++ Message.java
++ Group.java
++ GroupManager.java
++ GroupChatUI.java
 
 Nhiệm vụ
 P2P Chat
@@ -64,18 +65,18 @@ Tạo nhóm và chat nhóm được.
 --------------------------------------------------------------------------------
 
 Thành viên 3 - MEDIA
-Thư mục phụ trách
-src/media
 
-media/files
-media/images
-media/videos
-media/sounds
-File
-FileInfo.java
-FileTransferClient.java
-FileTransferServer.java
-MediaManager.java
+Thư mục phụ trách
+-src/media
+- media/files
+- media/images
+- media/videos
+- media/sounds
+- File
++ FileInfo.java
++ FileTransferClient.java
++ FileTransferServer.java
++ MediaManager.java
 
 Nhiệm vụ
 File
@@ -98,25 +99,24 @@ Truyền âm thanh thành công.
 --------------------------------------------------------------------------------
 
 Thành viên 4 - HISTORY & STORAGE
+
 Thư mục phụ trách
-src/history
-src/storage
+- src/history
+- src/storage
+- data/
+- File
++ HistoryManager.java
++ HistoryUI.java
++ JsonStorage.java
++ UserStorage.java
++ MessageStorage.java
++ GroupStorage.java
 
-data/
-File
-HistoryManager.java
-HistoryUI.java
-
-JsonStorage.java
-UserStorage.java
-MessageStorage.java
-GroupStorage.java
-
-Dữ liệu quản lý
-data/users.json
-data/messages.json
-data/groups.json
-data/status.json
+- Dữ liệu quản lý
++ data/users.json
++ data/messages.json
++ data/groups.json
++ data/status.json
 
 Nhiệm vụ
 Storage
@@ -137,23 +137,23 @@ Có thể xem lại lịch sử tin nhắn.
 
 Thành viên 5 - UI, LOGIN, EMOJI, STATUS
 Thư mục phụ trách
-src/auth
-src/status
-src/emoji
+- src/auth
+- src/status
+- src/emoji
+- resources/
+- File
++ LoginUI.java
++ RegisterUI.java
++ UserSession.java
+  
++ StatusManager.java
++ UserListUI.java
 
-resources/
-File
-LoginUI.java
-RegisterUI.java
-UserSession.java
-
-StatusManager.java
-UserListUI.java
-
-EmojiPanel.java
-Tài nguyên
-resources/emoji
-resources/icons
++ EmojiPanel.java
+  
+- Tài nguyên
++ resources/emoji
++ resources/icons
 
 Nhiệm vụ
 Login
