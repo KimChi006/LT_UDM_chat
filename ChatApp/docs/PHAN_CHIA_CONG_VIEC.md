@@ -117,7 +117,7 @@ File
 + MessageStorage.java
 + GroupStorage.java
 
-- Dữ liệu quản lý
+Dữ liệu quản lý
 + data/users.json
 + data/messages.json
 + data/groups.json
