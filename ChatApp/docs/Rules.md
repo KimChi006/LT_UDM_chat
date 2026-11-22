@@ -7,15 +7,11 @@ CODING RULES
 
 Ví dụ
 
--package server;
--package chat;
--package group;
--package media;
--package history;
--package storage;
--package auth;
--package status;
--package emoji;
+package server;
+
+package chat;
+
+package group;
 
 2. Class
 
@@ -38,14 +34,6 @@ Ví dụ
 String username;
 String password;
 String status;
-
-String sender;
-String receiver;
-String content;
-String filepath;
-
-String groupname;
-String messagetype;
 
 4. Hàm
 
