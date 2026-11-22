@@ -10,4 +10,6 @@ PACKET TYPE:
 - SOUND
 - STATUS
 - EMOJI
+
+
 Không tự ý thêm hoặc đổi tên PacketType.
