@@ -12,7 +12,8 @@ Thành viên 1 - SERVER CORE
 
 Thư mục phụ trách
 - src/server
-- File
+
+File
 + ServerMain.java
 + ClientHandler.java
 + MessageRouter.java
@@ -37,11 +38,13 @@ Thành viên 2 - CHAT & GROUP CHAT
 Thư mục phụ trách
 - src/chat
 - src/group
-- File
+  
+File
 + ChatUI.java
 + ClientSocket.java
 + MessageListener.java
 + Message.java
+  
 + Group.java
 + GroupManager.java
 + GroupChatUI.java
@@ -72,7 +75,8 @@ Thư mục phụ trách
 - media/images
 - media/videos
 - media/sounds
-- File
+
+File
 + FileInfo.java
 + FileTransferClient.java
 + FileTransferServer.java
@@ -104,7 +108,8 @@ Thư mục phụ trách
 - src/history
 - src/storage
 - data/
-- File
+
+File
 + HistoryManager.java
 + HistoryUI.java
 + JsonStorage.java
@@ -141,7 +146,8 @@ Thư mục phụ trách
 - src/status
 - src/emoji
 - resources/
-- File
+
+File
 + LoginUI.java
 + RegisterUI.java
 + UserSession.java
