@@ -156,8 +156,8 @@ File
 + UserListUI.java
 
 + EmojiPanel.java
-  
-- Tài nguyên
+
+Tài nguyên
 + resources/emoji
 + resources/icons
 
