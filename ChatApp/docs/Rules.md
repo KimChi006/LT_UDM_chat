@@ -30,9 +30,10 @@ public class ClientHandler {
 - Không dùng dấu gạch dưới (_).
 
 Ví dụ
-
 String username;
+
 String password;
+
 String status;
 
 4. Hàm
@@ -41,10 +42,10 @@ String status;
 - Nếu nhiều từ thì viết hoa chữ cái đầu từ thứ hai.
 
 Ví dụ
--sendMessage();
--loadHistory();
--saveMessage();
--createGroup();
+sendMessage();
+loadHistory();
+saveMessage();
+createGroup();
 
 Không dùng
 
@@ -57,8 +58,11 @@ send_message();
 - Nhiều từ dùng dấu gạch dưới.
 
 Ví dụ
+
 public static final int SERVER_PORT = 8080;
+
 public static final int MAX_CLIENT = 100;
+
 public static final String SERVER_HOST = "localhost";
 
 6. Enum
@@ -69,6 +73,7 @@ public static final String SERVER_HOST = "localhost";
 Ví dụ
 
 public enum PacketType {
+
     LOGIN,
     REGISTER,
     MESSAGE,
@@ -89,6 +94,7 @@ Ví dụ
 package chat;
 
 import model.PacketType;
+
 package server;
 
 import model.PacketType;
