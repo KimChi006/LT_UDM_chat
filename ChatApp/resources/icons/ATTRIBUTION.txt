@@ -1,0 +1,7 @@
+The PNG icons in this directory are Twemoji artwork.
+
+Copyright: Twitter, Inc. and other contributors
+License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+License text: https://creativecommons.org/licenses/by/4.0/
+Source: https://github.com/jdecked/twemoji
+Graphics license: https://github.com/jdecked/twemoji/blob/main/LICENSE-GRAPHICS
