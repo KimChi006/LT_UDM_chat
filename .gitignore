@@ -1,0 +1,8 @@
+# Files received through the chat are not committed
+media/files/*
+media/images/*
+media/videos/*
+media/sounds/*
+!media/*/.gitkeep
+*.class
+out/
