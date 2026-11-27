@@ -2,6 +2,7 @@ package group;
 
 import chat.ClientSocket;
 import chat.MessageListener;
+import history.HistoryManager;
 
 import javax.swing.*;
 import java.awt.*;
@@ -16,6 +17,7 @@ public class GroupChatUI extends JFrame implements MessageListener.PacketHandler
 
     private ClientSocket clientSocket;
     private MessageListener messageListener;
+    private final HistoryManager historyManager = HistoryManager.getInstance();
 
     private JTextArea chatArea;
     private JTextField messageField;
@@ -30,6 +32,7 @@ public class GroupChatUI extends JFrame implements MessageListener.PacketHandler
         this.group = group;
 
         initializeUI();
+        loadHistory();
         connectToServer();
     }
 
@@ -154,6 +157,7 @@ public class GroupChatUI extends JFrame implements MessageListener.PacketHandler
         String time = LocalDateTime.now().format(TIME_FORMAT);
 
         appendMessage(username + " [" + time + "]: " + content);
+        historyManager.saveGroupMessage(username, group.getGroupId(), content, time);
 
         messageField.setText("");
     }
@@ -177,6 +181,8 @@ public class GroupChatUI extends JFrame implements MessageListener.PacketHandler
             String displayMessage =
                     sender + " [" + time + "]: " + content;
 
+            historyManager.saveGroupMessage(sender, group.getGroupId(), content, time);
+
             SwingUtilities.invokeLater(
                     () -> appendMessage(displayMessage)
             );
@@ -195,6 +201,17 @@ public class GroupChatUI extends JFrame implements MessageListener.PacketHandler
     private void setConnectedUI(boolean connected) {
         sendButton.setEnabled(connected);
         messageField.setEnabled(connected);
+    }
+
+    private void loadHistory() {
+        String text = historyManager.formatHistory(
+                historyManager.getGroupHistory(group.getGroupId())
+        );
+
+        if (!text.isEmpty()) {
+            chatArea.append(text);
+            chatArea.setCaretPosition(chatArea.getDocument().getLength());
+        }
     }
 
     private void appendMessage(String message) {

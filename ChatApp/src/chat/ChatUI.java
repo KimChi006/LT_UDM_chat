@@ -1,5 +1,7 @@
 package chat;
 
+import history.HistoryManager;
+
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
@@ -13,6 +15,7 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
 
     private ClientSocket clientSocket;
     private MessageListener messageListener;
+    private final HistoryManager historyManager = HistoryManager.getInstance();
 
     private JTextArea chatArea;
     private JTextField messageField;
@@ -23,6 +26,7 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         this.receiver = receiver;
 
         initializeUI();
+        loadHistory();
         connectToServer();
     }
 
@@ -124,6 +128,7 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         );
 
         appendMessage(username + " [" + time + "]: " + content);
+        historyManager.savePrivateMessage(username, receiver, content, time);
 
         messageField.setText("");
     }
@@ -139,6 +144,7 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         if ("MESSAGE".equals(type)
                 && username.equals(packetReceiver)
                 && sender != null
+                && sender.equals(receiver)
                 && content != null) {
 
             String time = LocalDateTime.now().format(
@@ -146,6 +152,8 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
             );
 
             String displayMessage = sender + " [" + time + "]: " + content;
+
+            historyManager.savePrivateMessage(sender, username, content, time);
 
             SwingUtilities.invokeLater(() -> appendMessage(displayMessage));
         }
@@ -158,6 +166,17 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
             sendButton.setEnabled(false);
             messageField.setEnabled(false);
         });
+    }
+
+    private void loadHistory() {
+        String text = historyManager.formatHistory(
+                historyManager.getPrivateHistory(username, receiver)
+        );
+
+        if (!text.isEmpty()) {
+            chatArea.append(text);
+            chatArea.setCaretPosition(chatArea.getDocument().getLength());
+        }
     }
 
     private void appendMessage(String message) {

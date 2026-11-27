@@ -13,6 +13,9 @@ public class Message {
     private String time;
     private String groupId;
 
+    // Only used for media messages, for example "media/images/photo.png".
+    private String filepath;
+
     private static final DateTimeFormatter TIME_FORMAT =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
@@ -82,5 +85,13 @@ public class Message {
 
     public void setGroupId(String groupId) {
         this.groupId = groupId;
+    }
+
+    public String getFilepath() {
+        return filepath;
+    }
+
+    public void setFilepath(String filepath) {
+        this.filepath = filepath;
     }
 }
