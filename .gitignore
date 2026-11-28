@@ -4,5 +4,11 @@ media/images/*
 media/videos/*
 media/sounds/*
 !media/*/.gitkeep
+ChatApp/media/files/*
+ChatApp/media/images/*
+ChatApp/media/videos/*
+ChatApp/media/sounds/*
+!ChatApp/media/*/.gitkeep
+ChatApp/bin/
 *.class
 out/

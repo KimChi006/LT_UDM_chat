@@ -1,0 +1,10 @@
+{
+    "java.project.sourcePaths": [
+        "ChatApp/src",
+        "ChatApp/tests"
+    ],
+    "java.project.referencedLibraries": [
+        "ChatApp/lib/**/*.jar"
+    ],
+    "java.project.outputPath": "ChatApp/bin"
+}

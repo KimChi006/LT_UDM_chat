@@ -13,8 +13,6 @@ import java.io.File;
  */
 public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
 
-    private final String username;
-    private final String receiver;
     private final ClientSocket clientSocket;
     private final MediaManager mediaManager;
 
@@ -22,9 +20,6 @@ public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
     private FileInfo lastReceived;
 
     public MediaDemo(String username, String receiver) {
-        this.username = username;
-        this.receiver = receiver;
-
         setTitle("Media demo - " + username + " -> " + receiver);
         setSize(520, 420);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);

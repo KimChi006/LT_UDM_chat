@@ -4,14 +4,19 @@ import chat.ClientSocket;
 import model.PacketType;
 
 import javax.imageio.ImageIO;
+import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
+import javax.swing.JList;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JScrollPane;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.ListSelectionModel;
 import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Image;
@@ -20,6 +25,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -198,7 +204,7 @@ public class MediaManager {
     }
 
     public static File getFolder(PacketType type) {
-        return new File(MEDIA_ROOT, folderName(type));
+        return new File(getMediaRoot(), folderName(type));
     }
 
     public static String folderName(PacketType type) {
@@ -212,7 +218,18 @@ public class MediaManager {
 
     /** Relative path with forward slashes, e.g. media/images/a.png. */
     public static String toRelativePath(PacketType type, String filename) {
-        return MEDIA_ROOT + "/" + folderName(type) + "/" + filename;
+        return getMediaRoot().getPath().replace(File.separatorChar, '/')
+                + "/" + folderName(type) + "/" + filename;
+    }
+
+    private static File getMediaRoot() {
+        File workingDirectoryMedia = new File(MEDIA_ROOT);
+        if (workingDirectoryMedia.isDirectory()) {
+            return workingDirectoryMedia;
+        }
+
+        File chatAppMedia = new File("ChatApp", MEDIA_ROOT);
+        return chatAppMedia.isDirectory() ? chatAppMedia : workingDirectoryMedia;
     }
 
     public static PacketType detectType(File file) {
@@ -290,6 +307,52 @@ public class MediaManager {
         } catch (IOException | RuntimeException e) {
             JOptionPane.showMessageDialog(parent,
                     "Cannot open file: " + e.getMessage());
+        }
+    }
+
+    /** Lets the user choose any media item from the current conversation history. */
+    public static void chooseAndOpenMedia(Component parent, List<FileInfo> files) {
+        if (files == null || files.isEmpty()) {
+            JOptionPane.showMessageDialog(parent, "No media files in this conversation yet.");
+            return;
+        }
+
+        DefaultListModel<FileInfo> model = new DefaultListModel<FileInfo>();
+        for (FileInfo file : files) {
+            model.addElement(file);
+        }
+
+        JList<FileInfo> list = new JList<FileInfo>(model);
+        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        list.setVisibleRowCount(Math.min(8, model.size()));
+        list.setCellRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> source, Object value,
+                                                          int index, boolean selected,
+                                                          boolean hasFocus) {
+                JLabel label = (JLabel) super.getListCellRendererComponent(
+                        source, value, index, selected, hasFocus);
+                FileInfo info = (FileInfo) value;
+                String caption = info.getFilename() + "  [" + info.getType() + "]"
+                        + "  —  " + info.getSender();
+                if (info.getTime() != null && !info.getTime().trim().isEmpty()) {
+                    caption += "  ·  " + info.getTime();
+                }
+                if (info.getFile() == null || !info.getFile().isFile()) {
+                    caption += "  (file unavailable)";
+                }
+                label.setText(caption);
+                label.setBorder(BorderFactory.createEmptyBorder(7, 9, 7, 9));
+                return label;
+            }
+        });
+        list.setSelectedIndex(0);
+
+        int result = JOptionPane.showConfirmDialog(parent, new JScrollPane(list),
+                "Choose media to open", JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION && list.getSelectedValue() != null) {
+            openMedia(parent, list.getSelectedValue());
         }
     }
 

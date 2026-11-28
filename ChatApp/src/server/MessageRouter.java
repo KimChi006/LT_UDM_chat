@@ -36,6 +36,11 @@ public class MessageRouter {
         }
     }
 
+    public boolean unregisterClient(String username, ClientHandler expectedHandler) {
+        return username != null && expectedHandler != null
+                && clients.remove(username, expectedHandler);
+    }
+
     public boolean isClientConnected(String username) {
         return username != null && clients.containsKey(username);
     }

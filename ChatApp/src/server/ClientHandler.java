@@ -118,12 +118,14 @@ public class ClientHandler implements Runnable {
     public void close() {
         running = false;
         if (username != null) {
-            messageRouter.unregisterClient(username);
+            boolean wasRegistered = messageRouter.unregisterClient(username, this);
             if (serverMain != null) {
-                serverMain.unregisterClient(username);
+                wasRegistered |= serverMain.unregisterClient(username, this);
             }
-            messageRouter.broadcast("{\"type\":\"STATUS\",\"username\":\""
-                    + escape(username) + "\",\"status\":\"OFFLINE\"}");
+            if (wasRegistered) {
+                messageRouter.broadcast("{\"type\":\"STATUS\",\"username\":\""
+                        + escape(username) + "\",\"status\":\"OFFLINE\"}");
+            }
         }
         try {
             if (reader != null) {

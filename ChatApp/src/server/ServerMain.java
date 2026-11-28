@@ -67,8 +67,9 @@ public class ServerMain {
                 clientExecutor.execute(clientHandler);
             }
         } catch (IOException exception) {
-            if (running) {
-                System.err.println("Server error: " + exception.getMessage());
+            if (running || serverSocket == null || !serverSocket.isClosed()) {
+                System.err.println("Cannot start or continue server on port "
+                        + port + ": " + exception.getMessage());
             }
         } finally {
             running = false;
@@ -99,10 +100,22 @@ public class ServerMain {
     }
 
     public void unregisterClient(String username) {
-        if (username != null) {
-            clients.remove(username);
-            messageRouter.unregisterClient(username);
+        if (username == null) {
+            return;
         }
+        ClientHandler current = clients.get(username);
+        if (current != null) {
+            unregisterClient(username, current);
+        }
+    }
+
+    public boolean unregisterClient(String username, ClientHandler expectedHandler) {
+        if (username == null || expectedHandler == null) {
+            return false;
+        }
+        boolean removed = clients.remove(username, expectedHandler);
+        messageRouter.unregisterClient(username, expectedHandler);
+        return removed;
     }
 
     public Map<String, ClientHandler> getClients() {

@@ -2,6 +2,10 @@
 
 Module media nằm ở `src/media`. TV2 chỉ cần dùng class `MediaManager`.
 
+ChatUI và GroupChatUI hiện đã tích hợp sẵn nút Attach, nhận media, lưu vào
+lịch sử và mở media gần nhất. Các đoạn ví dụ dưới đây dùng khi tích hợp vào
+một cửa sổ chat khác.
+
 ## Chat cá nhân (ChatUI)
 
 ```java
@@ -77,3 +81,16 @@ ImageIcon icon = MediaManager.loadThumbnail(info, 200); // ảnh nhỏ để hi�
 - File nhận về lưu ở `media/files|images|videos|sounds/`.
 - TV4 lưu lịch sử: dùng `info.getFilename()` làm content và `info.getFilepath()` làm filepath.
 - Server (TV1) không cần sửa gì.
+
+## Khắc phục lỗi import Gson trong VS Code
+
+Thư viện đã được cung cấp tại `ChatApp/lib/gson-2.14.0.jar`. Workspace cần có
+`java.project.referencedLibraries` trỏ đến `ChatApp/lib/**/*.jar` (đã cấu hình
+trong `.vscode/settings.json`). Nếu VS Code vẫn báo `The import
+com.google.gson cannot be resolved`, mở Command Palette và chạy **Java: Clean
+Java Language Server Workspace**, sau đó reload VS Code. Nếu tự biên dịch bằng
+terminal từ thư mục gốc repo, thêm jar vào classpath:
+
+```powershell
+javac -encoding UTF-8 -cp "ChatApp\lib\gson-2.14.0.jar" -d ChatApp\bin (Get-ChildItem ChatApp\src -Recurse -Filter *.java | ForEach-Object FullName)
+```

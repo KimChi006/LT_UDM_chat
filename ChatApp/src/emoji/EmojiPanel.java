@@ -31,10 +31,14 @@ public class EmojiPanel extends JPanel {
             java.util.Collections.synchronizedSet(new HashSet<EmojiListener>());
 
     public EmojiPanel() {
-        this(DEFAULT_EMOJIS);
+        this(DEFAULT_EMOJIS, false);
     }
 
     public EmojiPanel(String[] emojis) {
+        this(emojis, false);
+    }
+
+    public EmojiPanel(String[] emojis, boolean largeItems) {
         super(new GridLayout(0, 6, 4, 4));
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
         setBackground(Color.WHITE);
@@ -42,12 +46,15 @@ public class EmojiPanel extends JPanel {
         String[] emojiItems = emojis == null || emojis.length == 0
                 ? DEFAULT_EMOJIS : emojis;
         for (final String emoji : emojiItems) {
-            ImageIcon icon = loadEmojiIcon(emoji);
+            int iconSize = largeItems ? 42 : 26;
+            ImageIcon icon = loadEmojiIcon(emoji, iconSize);
             JButton button = icon == null
                     ? new JButton(emoji) : new JButton("", icon);
-            button.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 20));
+            button.setFont(new Font("Segoe UI Emoji", Font.PLAIN,
+                    largeItems ? 34 : 20));
             button.setToolTipText(emoji);
-            button.setPreferredSize(new java.awt.Dimension(38, 38));
+            int buttonSize = largeItems ? 58 : 38;
+            button.setPreferredSize(new java.awt.Dimension(buttonSize, buttonSize));
             button.setBorderPainted(false);
             button.setContentAreaFilled(false);
             button.setFocusPainted(false);
@@ -56,7 +63,11 @@ public class EmojiPanel extends JPanel {
         }
     }
 
-    private ImageIcon loadEmojiIcon(String emoji) {
+    public static String[] getDefaultEmojis() {
+        return DEFAULT_EMOJIS.clone();
+    }
+
+    public static ImageIcon loadEmojiIcon(String emoji, int iconSize) {
         StringBuilder codepoints = new StringBuilder();
         for (int offset = 0; offset < emoji.length();) {
             int codepoint = emoji.codePointAt(offset);
@@ -72,7 +83,7 @@ public class EmojiPanel extends JPanel {
         String filename = codepoints + ".png";
         URL resource = EmojiPanel.class.getResource("/emoji/" + filename);
         if (resource != null) {
-            return createIcon(resource);
+            return createIcon(resource, iconSize);
         }
 
         Path path = Paths.get("resources", "emoji", filename);
@@ -83,7 +94,7 @@ public class EmojiPanel extends JPanel {
             return null;
         }
         try {
-            return createIcon(path.toUri().toURL());
+            return createIcon(path.toUri().toURL(), iconSize);
         } catch (java.net.MalformedURLException exception) {
             System.err.println("Cannot load emoji icon " + path + ": "
                     + exception.getMessage());
@@ -91,10 +102,10 @@ public class EmojiPanel extends JPanel {
         }
     }
 
-    private ImageIcon createIcon(URL resource) {
+    private static ImageIcon createIcon(URL resource, int iconSize) {
         ImageIcon original = new ImageIcon(resource);
         Image scaled = original.getImage().getScaledInstance(
-                26, 26, Image.SCALE_SMOOTH);
+                iconSize, iconSize, Image.SCALE_SMOOTH);
         return new ImageIcon(scaled);
     }
 

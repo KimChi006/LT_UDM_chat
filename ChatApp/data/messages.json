@@ -1,9 +1,151 @@
 [
   {
+    "type": "MESSAGE",
     "sender": "chi",
     "receiver": "nam",
     "content": "Xin chào",
-    "time": "2026-11-22 10:30:00",
-    "type": "MESSAGE"
+    "time": "2026-11-22 10:30:00"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "chi",
+    "receiver": "1",
+    "content": "111",
+    "time": "2026-11-28 11:43:14"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "2",
+    "receiver": "chi",
+    "content": "1111111111111",
+    "time": "2026-11-28 11:43:18"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "1",
+    "receiver": "chi",
+    "content": "111111111111111",
+    "time": "2026-11-28 11:43:52"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "chi",
+    "receiver": "1",
+    "content": "11111",
+    "time": "2026-11-28 11:43:55"
+  },
+  {
+    "type": "FILE",
+    "sender": "chi",
+    "receiver": "1",
+    "content": "lenhchaybaocao.docx",
+    "time": "2026-11-28 11:44:22",
+    "filepath": "D:\\12_python\\lenhchaybaocao.docx"
+  },
+  {
+    "type": "FILE",
+    "sender": "chi",
+    "receiver": "1",
+    "content": "lenhchaybaocao.docx",
+    "time": "2026-11-28 11:44:22",
+    "filepath": "media/files/lenhchaybaocao.docx"
+  },
+  {
+    "type": "FILE",
+    "sender": "chi",
+    "receiver": "1",
+    "content": "nhhhh.txt",
+    "time": "2026-11-28 11:44:48",
+    "filepath": "C:\\Users\\ACER NITRO\\OneDrive\\Tài liệu\\nhhhh.txt"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "hiii",
+    "time": "2026-11-28 11:58:36"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "chi",
+    "receiver": "hoa",
+    "content": "hi",
+    "time": "2026-11-28 12:16:46"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "chi",
+    "receiver": "hoa",
+    "content": "😀😀",
+    "time": "2026-11-28 12:17:12"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "😍",
+    "time": "2026-11-28 12:17:18"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "😂",
+    "time": "2026-11-28 12:17:24"
+  },
+  {
+    "type": "FILE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "nhhhh.txt",
+    "time": "2026-11-28 12:17:33",
+    "filepath": "C:\\Users\\ACER NITRO\\OneDrive\\Tài liệu\\nhhhh.txt"
+  },
+  {
+    "type": "FILE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "nhhhh_1.txt",
+    "time": "2026-11-28 12:17:33",
+    "filepath": "media/files/nhhhh_1.txt"
+  },
+  {
+    "type": "FILE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "lenhchaybaocao.docx",
+    "time": "2026-11-28 12:17:45",
+    "filepath": "D:\\12_python\\lenhchaybaocao.docx"
+  },
+  {
+    "type": "FILE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "lenhchaybaocao_1.docx",
+    "time": "2026-11-28 12:17:45",
+    "filepath": "media/files/lenhchaybaocao_1.docx"
+  },
+  {
+    "type": "VIDEO",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "Giao diện web điện tử – Figma - Google Chrome 2026-11-06 23-26-59.mp4",
+    "time": "2026-11-28 12:18:25",
+    "filepath": "C:\\Users\\ACER NITRO\\OneDrive\\Videos\\Captures\\Giao diện web điện tử – Figma - Google Chrome 2026-11-06 23-26-59.mp4"
+  },
+  {
+    "type": "VIDEO",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "Giao diện web điện tử _ Figma - Google Chrome 2026-11-06 23-26-59.mp4",
+    "time": "2026-11-28 12:18:25",
+    "filepath": "media/videos/Giao diện web điện tử _ Figma - Google Chrome 2026-11-06 23-26-59.mp4"
+  },
+  {
+    "type": "GROUP_MESSAGE",
+    "sender": "chi",
+    "content": "hi",
+    "time": "2026-11-28 12:20:23",
+    "groupId": "27f50741-5a09-44fe-9692-617bd73b019c"
   }
 ]

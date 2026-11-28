@@ -1,1 +1,4 @@
-[] 
+[
+  {"username":"chi","password":"12345","status":"OFFLINE"},
+  {"username":"hoa","password":"12345","status":"OFFLINE"}
+]

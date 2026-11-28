@@ -1,12 +1,20 @@
 package chat;
 
+import emoji.EmojiPickerPopup;
+import emoji.EmojiTextRenderer;
 import history.HistoryManager;
+import media.FileInfo;
+import media.MediaManager;
+import model.PacketType;
+import ui.AppTheme;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ChatUI extends JFrame implements MessageListener.PacketHandler {
 
@@ -15,11 +23,16 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
 
     private ClientSocket clientSocket;
     private MessageListener messageListener;
+    private MediaManager mediaManager;
     private final HistoryManager historyManager = HistoryManager.getInstance();
 
-    private JTextArea chatArea;
+    private JTextPane chatArea;
     private JTextField messageField;
     private JButton sendButton;
+    private JButton attachButton;
+    private JButton mediaButton;
+    private JButton emojiButton;
+    private EmojiPickerPopup emojiPicker;
 
     public ChatUI(String username, String receiver) {
         this.username = username;
@@ -32,49 +45,91 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
 
     private void initializeUI() {
         setTitle("Chat - " + username + " with " + receiver);
-        setSize(600, 500);
+        setSize(850, 620);
+        setMinimumSize(new Dimension(700, 500));
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
-        setLayout(new BorderLayout(10, 10));
+        getContentPane().setBackground(AppTheme.BACKGROUND);
+        setLayout(new BorderLayout());
 
-        // Header
-        JLabel header = new JLabel(
-                "Chat with " + receiver,
-                SwingConstants.CENTER
-        );
-        header.setFont(new Font("Arial", Font.BOLD, 18));
-        header.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JPanel header = new JPanel(new BorderLayout());
+        header.setBackground(AppTheme.SURFACE);
+        header.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, AppTheme.BORDER),
+                BorderFactory.createEmptyBorder(14, 20, 14, 20)
+        ));
+        JLabel title = new JLabel(receiver);
+        title.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        title.setForeground(AppTheme.TEXT);
+        JLabel subtitle = new JLabel("Cuộc trò chuyện riêng");
+        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        subtitle.setForeground(AppTheme.MUTED);
+        JPanel titlePanel = new JPanel(new GridLayout(2, 1, 0, 3));
+        titlePanel.setOpaque(false);
+        titlePanel.add(title);
+        titlePanel.add(subtitle);
+        header.add(titlePanel, BorderLayout.CENTER);
         add(header, BorderLayout.NORTH);
 
-        // Chat display area
-        chatArea = new JTextArea();
-        chatArea.setEditable(false);
-        chatArea.setFont(new Font("Arial", Font.PLAIN, 14));
-        chatArea.setLineWrap(true);
-        chatArea.setWrapStyleWord(true);
+        chatArea = new JTextPane();
+        AppTheme.styleChatPane(chatArea);
 
         JScrollPane scrollPane = new JScrollPane(chatArea);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getViewport().setBackground(AppTheme.BACKGROUND);
         add(scrollPane, BorderLayout.CENTER);
 
-        // Input area
         JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
+        inputPanel.setBackground(AppTheme.SURFACE);
+        inputPanel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, AppTheme.BORDER),
+                BorderFactory.createEmptyBorder(12, 16, 12, 16)
+        ));
 
         messageField = new JTextField();
+        AppTheme.styleTextField(messageField);
+        messageField.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 14));
         sendButton = new JButton("Send");
+        attachButton = new JButton("Attach");
+        mediaButton = new JButton("Media (0)");
+        emojiButton = new JButton("Emoji");
+        attachButton.setEnabled(false);
+        mediaButton.setEnabled(false);
+        AppTheme.styleButton(sendButton, true);
+        AppTheme.styleButton(attachButton, false);
+        AppTheme.styleButton(mediaButton, false);
+        AppTheme.styleButton(emojiButton, false);
+        emojiPicker = new EmojiPickerPopup((symbol, sticker) -> {
+            if (sticker) {
+                sendSticker(symbol);
+            } else {
+                insertEmoji(symbol);
+            }
+        });
+
+        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
+        actionsPanel.setOpaque(false);
+        actionsPanel.add(mediaButton);
+        actionsPanel.add(attachButton);
+        actionsPanel.add(emojiButton);
+        actionsPanel.add(sendButton);
 
         inputPanel.add(messageField, BorderLayout.CENTER);
-        inputPanel.add(sendButton, BorderLayout.EAST);
-        inputPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 10, 10));
+        inputPanel.add(actionsPanel, BorderLayout.EAST);
 
         add(inputPanel, BorderLayout.SOUTH);
 
         sendButton.addActionListener(e -> sendMessage());
+        attachButton.addActionListener(e -> chooseAndSendMedia());
+        emojiButton.addActionListener(e -> emojiPicker.showAt(emojiButton));
+        mediaButton.addActionListener(e ->
+                MediaManager.chooseAndOpenMedia(this, getConversationMedia()));
 
         messageField.addActionListener(e -> sendMessage());
 
         addWindowListener(new WindowAdapter() {
             @Override
-            public void windowClosing(WindowEvent e) {
+            public void windowClosed(WindowEvent e) {
                 disconnect();
             }
         });
@@ -89,6 +144,8 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
             appendMessage("[System] Cannot connect to server.");
             sendButton.setEnabled(false);
             messageField.setEnabled(false);
+            attachButton.setEnabled(false);
+            emojiButton.setEnabled(false);
             return;
         }
 
@@ -98,15 +155,80 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
 
         clientSocket.sendPacket(loginPacket);
 
+        mediaManager = new MediaManager(clientSocket, username, new MediaManager.MediaListener() {
+            @Override
+            public void onMediaReceived(FileInfo info) {
+                historyManager.saveMedia(info);
+                SwingUtilities.invokeLater(() -> showMedia(info, " received"));
+            }
+
+            @Override
+            public void onMediaSent(FileInfo info) {
+                historyManager.saveMedia(info);
+                SwingUtilities.invokeLater(() -> showMedia(info, " sent"));
+            }
+
+            @Override
+            public void onMediaError(String message) {
+                SwingUtilities.invokeLater(() -> appendMessage("[Media error] " + message));
+            }
+        });
+
         messageListener = new MessageListener(clientSocket, this);
         messageListener.start();
+        attachButton.setEnabled(true);
+        emojiButton.setEnabled(true);
 
         appendMessage("[System] Connected to server.");
     }
 
-    private void sendMessage() {
-        String content = messageField.getText().trim();
+    private void chooseAndSendMedia() {
+        java.io.File file = MediaManager.chooseFile(this);
+        if (file != null && mediaManager != null) {
+            mediaManager.sendMedia(receiver, null, file);
+        }
+    }
 
+    private void showMedia(FileInfo info, String action) {
+        appendMessage(info.getSender() + action + " " + info);
+        updateMediaButton();
+    }
+
+    private List<FileInfo> getConversationMedia() {
+        List<FileInfo> files = new ArrayList<FileInfo>();
+        for (Message message : historyManager.getPrivateHistory(username, receiver)) {
+            PacketType type = MediaManager.toMediaType(message.getType());
+            if (type != null && message.getFilepath() != null
+                    && !message.getFilepath().trim().isEmpty()) {
+                files.add(new FileInfo(type, message.getContent(), 0,
+                        message.getFilepath(), message.getSender(),
+                        message.getReceiver(), message.getGroupId(), message.getTime()));
+            }
+        }
+        return files;
+    }
+
+    private void updateMediaButton() {
+        int count = getConversationMedia().size();
+        mediaButton.setText("Media (" + count + ")");
+        mediaButton.setEnabled(count > 0);
+    }
+
+    private void sendMessage() {
+        sendContent(messageField.getText(), true);
+    }
+
+    private void sendSticker(String sticker) {
+        sendContent(sticker, false);
+    }
+
+    private void insertEmoji(String emoji) {
+        messageField.replaceSelection(emoji);
+        messageField.requestFocusInWindow();
+    }
+
+    private void sendContent(String rawContent, boolean clearInput) {
+        String content = rawContent == null ? "" : rawContent.trim();
         if (content.isEmpty()) {
             return;
         }
@@ -130,11 +252,17 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         appendMessage(username + " [" + time + "]: " + content);
         historyManager.savePrivateMessage(username, receiver, content, time);
 
-        messageField.setText("");
+        if (clearInput) {
+            messageField.setText("");
+        }
     }
 
     @Override
     public void onPacketReceived(String packet) {
+        if (mediaManager != null && mediaManager.handlePacket(packet)) {
+            return;
+        }
+
         String type = extractJsonValue(packet, "type");
         String sender = extractJsonValue(packet, "sender");
         String content = extractJsonValue(packet, "content");
@@ -165,6 +293,8 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
             appendMessage("[System] Disconnected from server.");
             sendButton.setEnabled(false);
             messageField.setEnabled(false);
+            attachButton.setEnabled(false);
+            emojiButton.setEnabled(false);
         });
     }
 
@@ -174,17 +304,19 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         );
 
         if (!text.isEmpty()) {
-            chatArea.append(text);
-            chatArea.setCaretPosition(chatArea.getDocument().getLength());
+            EmojiTextRenderer.append(chatArea, text);
         }
+        updateMediaButton();
     }
 
     private void appendMessage(String message) {
-        chatArea.append(message + "\n");
-        chatArea.setCaretPosition(chatArea.getDocument().getLength());
+        EmojiTextRenderer.append(chatArea, message + "\n");
     }
 
     private void disconnect() {
+        if (mediaManager != null) {
+            mediaManager.shutdown();
+        }
         if (messageListener != null) {
             messageListener.stop();
         } else if (clientSocket != null) {

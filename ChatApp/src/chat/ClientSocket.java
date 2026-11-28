@@ -75,30 +75,32 @@ public class ClientSocket {
     }
 
     public void close() {
-        try {
-            if (reader != null) {
-                reader.close();
-            }
-        } catch (IOException e) {
-            System.err.println("Error closing reader: "
-                    + e.getMessage());
-        }
-
-        if (writer != null) {
-            writer.close();
-        }
-
-        try {
-            if (socket != null && !socket.isClosed()) {
-                socket.close();
-            }
-        } catch (IOException e) {
-            System.err.println("Error closing socket: "
-                    + e.getMessage());
-        }
-
+        Socket socketToClose = socket;
+        BufferedReader readerToClose = reader;
+        PrintWriter writerToClose = writer;
         socket = null;
         reader = null;
         writer = null;
+
+        // Closing the socket first unblocks a listener blocked in readLine().
+        try {
+            if (socketToClose != null && !socketToClose.isClosed()) {
+                socketToClose.close();
+            }
+        } catch (IOException e) {
+            System.err.println("Error closing socket: " + e.getMessage());
+        }
+
+        try {
+            if (readerToClose != null) {
+                readerToClose.close();
+            }
+        } catch (IOException e) {
+            System.err.println("Error closing reader: " + e.getMessage());
+        }
+
+        if (writerToClose != null) {
+            writerToClose.close();
+        }
     }
 }

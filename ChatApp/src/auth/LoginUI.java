@@ -1,5 +1,6 @@
 package auth;
 
+import chat.ChatHomeUI;
 import model.User;
 import status.StatusManager;
 
@@ -34,9 +35,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class LoginUI extends JFrame {
-
-    private static final String DEFAULT_HOST = "localhost";
-    private static final int DEFAULT_PORT = 8080;
 
     private final JTextField usernameField;
     private final JPasswordField passwordField;
@@ -144,9 +142,7 @@ public class LoginUI extends JFrame {
         user.setStatus("ONLINE");
         UserSession.getInstance().login(user);
         StatusManager.getInstance().setStatus(username, "ONLINE");
-        JOptionPane.showMessageDialog(this,
-                "Login successful.", "Login",
-                JOptionPane.INFORMATION_MESSAGE);
+        new ChatHomeUI(user).setVisible(true);
         dispose();
     }
 
