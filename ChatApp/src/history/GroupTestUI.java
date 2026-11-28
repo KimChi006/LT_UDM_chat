@@ -34,13 +34,13 @@ public class GroupTestUI extends JFrame {
     private final JTextField nameField = new JTextField(18);
     private final JTextField creatorField = new JTextField(14);
     private final JTextField membersField = new JTextField(24);
-    private final JLabel groupIdLabel = new JLabel("Group ID: (not created yet)");
+    private final JLabel groupIdLabel = new JLabel("Mã nhóm: (chưa tạo)");
 
     private final GroupManager groupManager = new GroupManager();
     private final GroupStorage groupStorage = new GroupStorage();
 
     public GroupTestUI() {
-        super("Create group - TV4 test");
+        super("Tạo nhóm - kiểm tra");
         buildInterface();
         setSize(560, 260);
         setLocationRelativeTo(null);
@@ -56,38 +56,38 @@ public class GroupTestUI extends JFrame {
         constraints.fill = GridBagConstraints.HORIZONTAL;
         constraints.gridx = 0;
         constraints.gridy = 0;
-        form.add(new JLabel("Group name:"), constraints);
+        form.add(new JLabel("Tên nhóm:"), constraints);
 
         constraints.gridx = 1;
         form.add(nameField, constraints);
 
         constraints.gridx = 0;
         constraints.gridy = 1;
-        form.add(new JLabel("Creator:"), constraints);
+        form.add(new JLabel("Người tạo:"), constraints);
 
         constraints.gridx = 1;
         form.add(creatorField, constraints);
 
         constraints.gridx = 0;
         constraints.gridy = 2;
-        form.add(new JLabel("Members:"), constraints);
+        form.add(new JLabel("Thành viên:"), constraints);
 
         constraints.gridx = 1;
         form.add(membersField, constraints);
 
         constraints.gridx = 1;
         constraints.gridy = 3;
-        form.add(new JLabel("Separate usernames with commas"), constraints);
+        form.add(new JLabel("Ngăn cách tên bằng dấu phẩy"), constraints);
 
         constraints.gridx = 0;
         constraints.gridy = 4;
         constraints.gridwidth = 2;
         form.add(groupIdLabel, constraints);
 
-        JButton createButton = new JButton("Create and open chat");
+        JButton createButton = new JButton("Tạo và mở trò chuyện");
         createButton.addActionListener(event -> createGroup());
 
-        JButton openButton = new JButton("Open saved group");
+        JButton openButton = new JButton("Mở nhóm đã lưu");
         openButton.addActionListener(event -> openSavedGroup());
 
         JPanel buttons = new JPanel();
@@ -103,22 +103,22 @@ public class GroupTestUI extends JFrame {
         String creator = creatorField.getText().trim();
 
         if (groupName.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Group name cannot be empty.",
-                    "Create group", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Tên nhóm không được để trống.",
+                    "Tạo nhóm", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         if (creator.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Creator username cannot be empty.",
-                    "Create group", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Tên người tạo không được để trống.",
+                    "Tạo nhóm", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         List<String> members = parseMembers(membersField.getText());
         if (members.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "Enter at least one member (usernames separated by commas).",
-                    "Create group", JOptionPane.WARNING_MESSAGE);
+                    "Nhập ít nhất một thành viên, các tên cách nhau bằng dấu phẩy.",
+                    "Tạo nhóm", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
@@ -132,15 +132,15 @@ public class GroupTestUI extends JFrame {
         }
         if (!hasOtherMember) {
             JOptionPane.showMessageDialog(this,
-                    "Enter at least one member besides the creator.",
-                    "Create group", JOptionPane.WARNING_MESSAGE);
+                    "Nhập ít nhất một thành viên ngoài người tạo.",
+                    "Tạo nhóm", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         Group group = groupManager.createGroup(groupName, creator);
         if (group == null) {
-            JOptionPane.showMessageDialog(this, "Cannot create group.",
-                    "Create group", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Không thể tạo nhóm.",
+                    "Tạo nhóm", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -153,16 +153,16 @@ public class GroupTestUI extends JFrame {
         // Saving through TV4 storage lets the second client and HistoryUI find this group.
         if (!groupStorage.saveGroup(group)) {
             JOptionPane.showMessageDialog(this,
-                    "Group was created but groups.json could not be saved.\n"
-                            + "The second client will need the Group ID typed manually.",
-                    "Create group", JOptionPane.WARNING_MESSAGE);
+                    "Đã tạo nhóm nhưng không thể lưu groups.json.\n"
+                            + "Thiết bị thứ hai cần tự nhập mã nhóm.",
+                    "Tạo nhóm", JOptionPane.WARNING_MESSAGE);
         }
 
-        groupIdLabel.setText("Group ID: " + group.getGroupId());
+        groupIdLabel.setText("Mã nhóm: " + group.getGroupId());
         JOptionPane.showMessageDialog(this,
-                "Group created.\nGroup ID: " + group.getGroupId()
-                        + "\nMembers: " + group.getMembers(),
-                "Create group", JOptionPane.INFORMATION_MESSAGE);
+                "Đã tạo nhóm.\nMã nhóm: " + group.getGroupId()
+                        + "\nThành viên: " + group.getMembers(),
+                "Tạo nhóm", JOptionPane.INFORMATION_MESSAGE);
 
         new GroupChatUI(creator, group);
     }
@@ -170,13 +170,13 @@ public class GroupTestUI extends JFrame {
     private void openSavedGroup() {
         List<Group> groups = groupStorage.loadAll();
         if (groups == null || groups.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No saved groups yet. Create one first.",
-                    "Open group", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Chưa có nhóm nào. Hãy tạo nhóm trước.",
+                    "Mở nhóm", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
         String username = JOptionPane.showInputDialog(this,
-                "Your username:", "Open group", JOptionPane.QUESTION_MESSAGE);
+                "Tên người dùng:", "Mở nhóm", JOptionPane.QUESTION_MESSAGE);
         if (username == null || username.trim().isEmpty()) {
             return;
         }
@@ -188,7 +188,7 @@ public class GroupTestUI extends JFrame {
 
         String[] options = choices.keySet().toArray(new String[choices.size()]);
         Object selected = JOptionPane.showInputDialog(this,
-                "Choose a group:", "Open group", JOptionPane.QUESTION_MESSAGE,
+                "Chọn nhóm:", "Mở nhóm", JOptionPane.QUESTION_MESSAGE,
                 null, options, options[0]);
         if (selected == null) {
             return;

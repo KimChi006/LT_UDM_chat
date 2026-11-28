@@ -17,8 +17,8 @@ public final class EmojiPickerPopup {
 
     public EmojiPickerPopup(SelectionListener listener) {
         JTabbedPane tabs = new JTabbedPane();
-        tabs.addTab("Emoji", createPanel(null, false, listener));
-        tabs.addTab("Sticker", createPanel(STICKERS, true, listener));
+        tabs.addTab("Biểu tượng", createPanel(null, false, listener));
+        tabs.addTab("Nhãn dán", createPanel(STICKERS, true, listener));
         tabs.setPreferredSize(new java.awt.Dimension(370, 340));
         popup.add(tabs);
     }

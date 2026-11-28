@@ -101,6 +101,31 @@ public class FriendStorage {
         return storage.writeArray(records);
     }
 
+    public boolean migrateIdentity(String oldIdentity, String newIdentity) {
+        if (!hasText(oldIdentity) || !hasText(newIdentity)) {
+            return false;
+        }
+        JsonArray records = storage.readArray();
+        if (records == null) {
+            return false;
+        }
+        boolean changed = false;
+        for (JsonElement element : records) {
+            if (!element.isJsonObject()) {
+                continue;
+            }
+            JsonObject record = element.getAsJsonObject();
+            if (oldIdentity.equalsIgnoreCase(readString(record, "username"))) {
+                record.addProperty("username", newIdentity);
+                changed = true;
+            }
+            changed |= replace(getNames(record, "friends"), oldIdentity, newIdentity);
+            changed |= replace(getNames(record, "incomingRequests"),
+                    oldIdentity, newIdentity);
+        }
+        return !changed || storage.writeArray(records);
+    }
+
     private static JsonObject findUser(JsonArray records, String username,
                                        boolean create) {
         for (JsonElement element : records) {
@@ -176,6 +201,19 @@ public class FriendStorage {
             }
         }
         return false;
+    }
+
+    private static boolean replace(JsonArray values, String oldValue, String newValue) {
+        boolean changed = false;
+        for (int index = 0; index < values.size(); index++) {
+            JsonElement value = values.get(index);
+            if (value.isJsonPrimitive()
+                    && oldValue.equalsIgnoreCase(value.getAsString())) {
+                values.set(index, new com.google.gson.JsonPrimitive(newValue));
+                changed = true;
+            }
+        }
+        return changed;
     }
 
     private static String readString(JsonObject object, String key) {

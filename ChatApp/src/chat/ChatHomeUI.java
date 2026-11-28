@@ -1,7 +1,10 @@
 package chat;
 
+import auth.AccountClient;
 import auth.LoginUI;
+import auth.PhoneNumber;
 import auth.UserSession;
+import com.google.gson.JsonObject;
 import history.HistoryManager;
 import group.Group;
 import group.GroupChatUI;
@@ -9,8 +12,6 @@ import group.GroupManager;
 import model.User;
 import status.StatusManager;
 import storage.GroupStorage;
-import storage.FriendStorage;
-import storage.UserStorage;
 import ui.AppTheme;
 
 import javax.swing.BorderFactory;
@@ -26,7 +27,6 @@ import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.ListSelectionModel;
@@ -39,8 +39,8 @@ import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
-import java.awt.Font;
 import java.awt.FlowLayout;
+import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
@@ -48,22 +48,22 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-public class ChatHomeUI extends JFrame {
+public class ChatHomeUI extends JFrame implements StatusManager.StatusListener {
 
     private final User currentUser;
-    private final UserStorage userStorage = new UserStorage();
     private final GroupStorage groupStorage = new GroupStorage();
-    private final FriendStorage friendStorage = new FriendStorage();
+    private final AccountClient accountClient;
+    private final String serverHost;
     private final HistoryManager historyManager = HistoryManager.getInstance();
     private final DefaultListModel<User> peopleModel = new DefaultListModel<User>();
     private final DefaultListModel<Group> groupsModel = new DefaultListModel<Group>();
-
     private final JList<User> peopleList = new JList<User>(peopleModel);
     private final JList<Group> groupsList = new JList<Group>(groupsModel);
     private final JPanel listCards = new JPanel(new CardLayout());
@@ -80,20 +80,27 @@ public class ChatHomeUI extends JFrame {
 
     private User selectedUser;
     private Group selectedGroup;
-    private JFrame activeConversation;
     private ChatUI embeddedChat;
+    private GroupChatUI embeddedGroupChat;
     private volatile ClientSocket inboxSocket;
     private MessageListener inboxListener;
     private boolean switchingConversation;
     private boolean closingHome;
 
     public ChatHomeUI(User user) {
+        this(user, "localhost");
+    }
+
+    public ChatHomeUI(User user, String serverHost) {
         super("UDM Chat");
-        if (user == null || user.getUsername() == null) {
+        if (user == null || user.getUsername() == null
+                || serverHost == null || serverHost.trim().isEmpty()) {
             throw new IllegalArgumentException("A signed-in user is required.");
         }
-
         currentUser = user;
+        this.serverHost = serverHost.trim();
+        accountClient = new AccountClient(this.serverHost);
+        StatusManager.getInstance().addListener(this);
         initializeUI();
         refreshData();
         connectInbox();
@@ -109,10 +116,13 @@ public class ChatHomeUI extends JFrame {
         root.setBackground(AppTheme.BACKGROUND);
         setContentPane(root);
 
-        JPanel sidebar = createSidebar();
-        sidebar.setPreferredSize(new Dimension(360, 0));
-        root.add(sidebar, BorderLayout.WEST);
-        root.add(createDetailsPanel(), BorderLayout.CENTER);
+        JPanel workspace = new JPanel(new BorderLayout());
+        JPanel conversationList = createSidebar();
+        conversationList.setPreferredSize(new Dimension(310, 0));
+        workspace.add(conversationList, BorderLayout.WEST);
+        workspace.add(createDetailsPanel(), BorderLayout.CENTER);
+        root.add(createNavigationPanel(), BorderLayout.WEST);
+        root.add(workspace, BorderLayout.CENTER);
 
         createGroupButton.addActionListener(event -> createGroup());
         addFriendButton.addActionListener(event -> addFriend());
@@ -147,7 +157,7 @@ public class ChatHomeUI extends JFrame {
         });
 
         groupsList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        groupsList.setFixedCellHeight(70);
+        groupsList.setFixedCellHeight(84);
         groupsList.setCellRenderer(new GroupRenderer());
         groupsList.addListSelectionListener(event -> {
             if (!event.getValueIsAdjusting() && groupsList.getSelectedValue() != null) {
@@ -171,12 +181,63 @@ public class ChatHomeUI extends JFrame {
                 closeActiveConversation();
                 closeEmbeddedChat();
                 disconnectInbox();
-                StatusManager.getInstance().setStatus(currentUser.getUsername(), "OFFLINE");
+                StatusManager.getInstance().removeListener(ChatHomeUI.this);
+                StatusManager.getInstance().setStatus(currentUser.getIdentity(), "OFFLINE");
                 UserSession.getInstance().logout();
             }
         });
 
         showWelcome();
+    }
+
+    private JPanel createNavigationPanel() {
+        JPanel navigationPanel = new JPanel();
+        navigationPanel.setLayout(new BoxLayout(navigationPanel, BoxLayout.Y_AXIS));
+        navigationPanel.setBackground(AppTheme.SURFACE);
+        navigationPanel.setBorder(BorderFactory.createMatteBorder(
+                0, 0, 0, 1, AppTheme.BORDER));
+        navigationPanel.setPreferredSize(new Dimension(104, 0));
+
+        JLabel brand = new JLabel("UDM", SwingConstants.CENTER);
+        brand.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        brand.setForeground(AppTheme.PRIMARY);
+        brand.setAlignmentX(Component.CENTER_ALIGNMENT);
+        brand.setBorder(BorderFactory.createEmptyBorder(18, 8, 20, 8));
+        navigationPanel.add(brand);
+
+        ButtonGroup navigation = new ButtonGroup();
+        navigation.add(peopleButton);
+        navigation.add(groupsButton);
+        styleToggle(peopleButton, true);
+        styleToggle(groupsButton, false);
+        peopleButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        groupsButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        peopleButton.setMaximumSize(new Dimension(92, 40));
+        groupsButton.setMaximumSize(new Dimension(92, 40));
+        navigationPanel.add(peopleButton);
+        navigationPanel.add(Box.createVerticalStrut(6));
+        navigationPanel.add(groupsButton);
+        navigationPanel.add(Box.createVerticalStrut(18));
+
+        for (JButton button : new JButton[]{
+                addFriendButton, friendRequestsButton, createGroupButton}) {
+            AppTheme.styleButton(button, false);
+            button.setAlignmentX(Component.CENTER_ALIGNMENT);
+            button.setMaximumSize(new Dimension(96, 42));
+            navigationPanel.add(button);
+            navigationPanel.add(Box.createVerticalStrut(6));
+        }
+
+        navigationPanel.add(Box.createVerticalGlue());
+        JButton logoutButton = new JButton("Đăng xuất");
+        AppTheme.styleButton(logoutButton, false);
+        logoutButton.setAlignmentX(Component.CENTER_ALIGNMENT);
+        logoutButton.setMaximumSize(new Dimension(96, 42));
+        logoutButton.setToolTipText("Đăng xuất");
+        logoutButton.addActionListener(event -> logout());
+        navigationPanel.add(logoutButton);
+        navigationPanel.add(Box.createVerticalStrut(12));
+        return navigationPanel;
     }
 
     private JPanel createSidebar() {
@@ -187,13 +248,13 @@ public class ChatHomeUI extends JFrame {
 
         JPanel header = new JPanel(new BorderLayout(8, 8));
         header.setBackground(AppTheme.SURFACE);
-        header.setBorder(BorderFactory.createEmptyBorder(18, 18, 12, 16));
+        header.setBorder(BorderFactory.createEmptyBorder(18, 16, 12, 16));
 
         JPanel titleBlock = new JPanel();
         titleBlock.setOpaque(false);
         titleBlock.setLayout(new BoxLayout(titleBlock, BoxLayout.Y_AXIS));
-        JLabel title = new JLabel("Tin nhắn");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        JLabel title = new JLabel("Trò chuyện");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 20));
         title.setForeground(AppTheme.TEXT);
         JLabel account = new JLabel("Đăng nhập: " + currentUser.getUsername());
         account.setFont(new Font("Segoe UI", Font.PLAIN, 12));
@@ -206,34 +267,14 @@ public class ChatHomeUI extends JFrame {
         titleBlock.add(Box.createVerticalStrut(3));
         titleBlock.add(inboxStatus);
 
-        AppTheme.styleButton(addFriendButton, true);
-        AppTheme.styleButton(friendRequestsButton, false);
-        AppTheme.styleButton(createGroupButton, false);
         header.add(titleBlock, BorderLayout.CENTER);
-        JPanel contactActions = new JPanel(new FlowLayout(FlowLayout.LEFT, 5, 0));
-        contactActions.setOpaque(false);
-        contactActions.add(addFriendButton);
-        contactActions.add(friendRequestsButton);
-        contactActions.add(createGroupButton);
-        header.add(contactActions, BorderLayout.SOUTH);
 
         JPanel searchPanel = new JPanel(new BorderLayout(0, 10));
         searchPanel.setBackground(AppTheme.SURFACE);
-        searchPanel.setBorder(BorderFactory.createEmptyBorder(0, 16, 12, 16));
+        searchPanel.setBorder(BorderFactory.createEmptyBorder(0, 14, 12, 14));
         AppTheme.styleTextField(searchField);
-        searchField.setToolTipText("Tìm tên người hoặc nhóm");
+        searchField.setToolTipText("Tìm theo tên hiển thị, số điện thoại hoặc tên nhóm");
         searchPanel.add(searchField, BorderLayout.CENTER);
-
-        ButtonGroup navigation = new ButtonGroup();
-        navigation.add(peopleButton);
-        navigation.add(groupsButton);
-        styleToggle(peopleButton, true);
-        styleToggle(groupsButton, false);
-        JPanel tabs = new JPanel(new BorderLayout(6, 0));
-        tabs.setBackground(AppTheme.SURFACE);
-        tabs.add(peopleButton, BorderLayout.WEST);
-        tabs.add(groupsButton, BorderLayout.CENTER);
-        searchPanel.add(tabs, BorderLayout.SOUTH);
 
         JPanel top = new JPanel(new BorderLayout());
         top.setBackground(AppTheme.SURFACE);
@@ -245,27 +286,15 @@ public class ChatHomeUI extends JFrame {
         listCards.add(new JScrollPane(peopleList), "people");
         listCards.add(new JScrollPane(groupsList), "groups");
 
-        JButton logoutButton = new JButton("Đăng xuất");
-        AppTheme.styleButton(logoutButton, false);
-        logoutButton.addActionListener(event -> logout());
-        JPanel footer = new JPanel(new BorderLayout());
-        footer.setBackground(AppTheme.SURFACE);
-        footer.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(1, 0, 0, 0, AppTheme.BORDER),
-                BorderFactory.createEmptyBorder(10, 14, 10, 14)
-        ));
-        footer.add(logoutButton, BorderLayout.EAST);
-
         sidebar.add(top, BorderLayout.NORTH);
         sidebar.add(listCards, BorderLayout.CENTER);
-        sidebar.add(footer, BorderLayout.SOUTH);
         return sidebar;
     }
 
     private JPanel createDetailsPanel() {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(AppTheme.BACKGROUND);
-        panel.setBorder(BorderFactory.createEmptyBorder(28, 32, 28, 32));
+        panel.setBorder(BorderFactory.createEmptyBorder());
         detailsBody.setOpaque(false);
         detailsBody.setLayout(new BoxLayout(detailsBody, BoxLayout.Y_AXIS));
         conversationBody.setBackground(AppTheme.CHAT_BACKGROUND);
@@ -304,21 +333,44 @@ public class ChatHomeUI extends JFrame {
     }
 
     private void refreshData() {
-        List<User> users = userStorage.loadAll();
         List<Group> groups = groupStorage.loadAll();
-        List<String> friends = friendStorage.getFriends(currentUser.getUsername());
-        List<String> requests =
-                friendStorage.getIncomingRequests(currentUser.getUsername());
-        if (users == null || groups == null || friends == null || requests == null) {
+        if (groups == null) {
             JOptionPane.showMessageDialog(this,
-                    "Không thể đọc dữ liệu tài khoản, bạn bè hoặc nhóm. Kiểm tra các file JSON trong ChatApp/data.",
+                    "Không thể đọc dữ liệu nhóm trong ChatApp/data/groups.json.",
                     "Lỗi dữ liệu", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
+        JsonObject directory;
+        JsonObject friendData;
+        try {
+            directory = accountClient.listUsers(currentUser.getIdentity(),
+                    currentUser.getPassword());
+            friendData = accountClient.getFriendData(currentUser.getIdentity(),
+                    currentUser.getPassword());
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
+            return;
+        }
+        if (!"OK".equals(AccountClient.value(directory, "status"))
+                || !"OK".equals(AccountClient.value(friendData, "status"))) {
+            showServerError(firstMessage(directory, friendData));
+            return;
+        }
+
+        List<User> users;
+        List<String> friends;
+        List<String> requests;
+        try {
+            users = AccountClient.userList(directory);
+            friends = AccountClient.stringList(friendData, "friends");
+            requests = AccountClient.stringList(friendData, "requests");
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
+            return;
+        }
+
         friendRequestsButton.setText("Lời mời (" + requests.size() + ")");
-        Collections.sort(users, Comparator.comparing(
-                User::getUsername, String.CASE_INSENSITIVE_ORDER));
         Collections.sort(groups, Comparator.comparing(
                 group -> group.getGroupName() == null ? "" : group.getGroupName(),
                 String.CASE_INSENSITIVE_ORDER));
@@ -326,16 +378,18 @@ public class ChatHomeUI extends JFrame {
         allPeople.clear();
         allGroups.clear();
         for (User user : users) {
-            if (user.getUsername().equalsIgnoreCase(currentUser.getUsername())) {
+            if (user.getIdentity().equalsIgnoreCase(currentUser.getIdentity())) {
                 continue;
             }
             allUsers.add(user);
-            if (containsIgnoreCase(friends, user.getUsername())) {
+            if (containsIgnoreCase(friends, user.getIdentity())
+                    || containsIgnoreCase(friends, user.getUsername())) {
                 allPeople.add(user);
             }
         }
         for (Group group : groups) {
-            if (group.isMember(currentUser.getUsername())) {
+            if (group.isMember(currentUser.getIdentity())
+                    || group.isMember(currentUser.getUsername())) {
                 allGroups.add(group);
             }
         }
@@ -354,7 +408,9 @@ public class ChatHomeUI extends JFrame {
         selectedGroup = null;
         peopleModel.clear();
         for (User user : allPeople) {
-            if (user.getUsername().toLowerCase(Locale.ROOT).contains(query)) {
+            if (user.getUsername().toLowerCase(Locale.ROOT).contains(query)
+                    || (user.getPhoneNumber() != null
+                    && user.getPhoneNumber().contains(query))) {
                 peopleModel.addElement(user);
             }
         }
@@ -367,12 +423,13 @@ public class ChatHomeUI extends JFrame {
                 groupsModel.addElement(group);
             }
         }
-        if (embeddedChat == null) {
+        if (embeddedChat == null && embeddedGroupChat == null) {
             showWelcome();
         }
     }
 
     private void showWelcome() {
+        closeActiveConversation();
         closeEmbeddedChat();
         ((CardLayout) detailsCards.getLayout()).show(detailsCards, "details");
         detailsBody.removeAll();
@@ -397,48 +454,9 @@ public class ChatHomeUI extends JFrame {
     }
 
     private void showGroupDetails(Group group) {
-        closeEmbeddedChat();
-        ((CardLayout) detailsCards.getLayout()).show(detailsCards, "details");
         selectedGroup = group;
         selectedUser = null;
-        detailsBody.removeAll();
-        detailsBody.add(Box.createVerticalGlue());
-        JLabel avatar = new JLabel(new AvatarIcon(group.getGroupName(), 86));
-        avatar.setAlignmentX(Component.CENTER_ALIGNMENT);
-        detailsBody.add(avatar);
-        detailsBody.add(Box.createVerticalStrut(16));
-        detailsBody.add(detailLabel(group.getGroupName(), 23, true));
-        detailsBody.add(Box.createVerticalStrut(6));
-        detailsBody.add(detailLabel("Người tạo: " + group.getCreator(), 14, false));
-        detailsBody.add(Box.createVerticalStrut(16));
-
-        JTextArea members = new JTextArea();
-        members.setEditable(false);
-        members.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        members.setForeground(AppTheme.TEXT);
-        members.setBackground(AppTheme.SURFACE);
-        members.setBorder(BorderFactory.createEmptyBorder(10, 14, 10, 14));
-        members.append("Thành viên (" + group.getMemberCount() + ")\n");
-        for (String member : group.getMembers()) {
-            members.append("- " + member
-                    + (member.equals(group.getCreator()) ? "  (trưởng nhóm)" : "")
-                    + "\n");
-        }
-        JScrollPane memberScroll = new JScrollPane(members);
-        memberScroll.setAlignmentX(Component.CENTER_ALIGNMENT);
-        memberScroll.setPreferredSize(new Dimension(360, 170));
-        memberScroll.setMaximumSize(new Dimension(420, 190));
-        memberScroll.setBorder(BorderFactory.createLineBorder(AppTheme.BORDER));
-        detailsBody.add(memberScroll);
-        detailsBody.add(Box.createVerticalStrut(18));
-
-        JButton openButton = new JButton("Mở nhóm chat");
-        AppTheme.styleButton(openButton, true);
-        openButton.setAlignmentX(Component.CENTER_ALIGNMENT);
-        openButton.addActionListener(event -> openGroupChat(group));
-        detailsBody.add(openButton);
-        detailsBody.add(Box.createVerticalGlue());
-        refreshDetails();
+        openGroupChat(group);
     }
 
     private JLabel detailLabel(String text, int size, boolean bold) {
@@ -455,82 +473,102 @@ public class ChatHomeUI extends JFrame {
     }
 
     private void addFriend() {
-        String username = JOptionPane.showInputDialog(this,
-                "Nhập tên tài khoản muốn kết bạn:", "Kết bạn",
+        String phoneNumberInput = JOptionPane.showInputDialog(this,
+                "Nhập số điện thoại muốn kết bạn:", "Kết bạn",
                 JOptionPane.PLAIN_MESSAGE);
-        if (username == null) {
+        if (phoneNumberInput == null) {
             return;
         }
-        username = username.trim();
-        if (username.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Tên tài khoản không được để trống.",
+        String phoneNumber = PhoneNumber.normalize(phoneNumberInput);
+        if (phoneNumber == null) {
+            JOptionPane.showMessageDialog(this, "Số điện thoại không hợp lệ.",
                     "Kết bạn", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        List<User> users = userStorage.loadAll();
-        if (users == null) {
-            JOptionPane.showMessageDialog(this,
-                    "Không thể đọc danh sách tài khoản trong ChatApp/data/users.json.",
-                    "Lỗi dữ liệu", JOptionPane.ERROR_MESSAGE);
+        JsonObject directory;
+        JsonObject friendData;
+        try {
+            directory = accountClient.listUsers(currentUser.getIdentity(),
+                    currentUser.getPassword());
+            friendData = accountClient.getFriendData(currentUser.getIdentity(),
+                    currentUser.getPassword());
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
+            return;
+        }
+        if (!"OK".equals(AccountClient.value(directory, "status"))
+                || !"OK".equals(AccountClient.value(friendData, "status"))) {
+            showServerError(firstMessage(directory, friendData));
+            return;
+        }
+
+        List<User> users;
+        List<String> friends;
+        try {
+            users = AccountClient.userList(directory);
+            friends = AccountClient.stringList(friendData, "friends");
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
             return;
         }
         User requestedUser = null;
         for (User user : users) {
-            if (user.getUsername().equalsIgnoreCase(username)) {
+            if (phoneNumber.equals(user.getPhoneNumber())) {
                 requestedUser = user;
                 break;
             }
         }
         if (requestedUser == null) {
-            JOptionPane.showMessageDialog(this, "Không tìm thấy tài khoản này.",
+            JOptionPane.showMessageDialog(this,
+                    "Không tìm thấy tài khoản này trên máy chủ.",
                     "Kết bạn", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        if (requestedUser.getUsername().equalsIgnoreCase(currentUser.getUsername())) {
+        if (requestedUser.getIdentity().equalsIgnoreCase(currentUser.getIdentity())) {
             JOptionPane.showMessageDialog(this, "Bạn không thể tự kết bạn.",
                     "Kết bạn", JOptionPane.WARNING_MESSAGE);
             return;
         }
-
-        List<String> friends = friendStorage.getFriends(currentUser.getUsername());
-        if (friends == null) {
-            showFriendStorageError();
-            return;
-        }
-        if (containsIgnoreCase(friends, requestedUser.getUsername())) {
+        if (containsIgnoreCase(friends, requestedUser.getIdentity())) {
             JOptionPane.showMessageDialog(this, "Hai bạn đã là bạn bè.",
                     "Kết bạn", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
-        List<String> pendingRequests =
-                friendStorage.getIncomingRequests(requestedUser.getUsername());
-        if (pendingRequests == null) {
-            showFriendStorageError();
+        JsonObject response;
+        try {
+            response = accountClient.sendFriendRequest(
+                    currentUser.getIdentity(), currentUser.getPassword(),
+                    requestedUser.getIdentity());
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
             return;
         }
-        if (containsIgnoreCase(pendingRequests, currentUser.getUsername())) {
-            JOptionPane.showMessageDialog(this,
-                    "Lời mời đến tài khoản này đã được gửi và đang chờ chấp nhận.",
-                    "Kết bạn", JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        if (!friendStorage.sendRequest(currentUser.getUsername(),
-                requestedUser.getUsername())) {
-            showFriendStorageError();
-            return;
-        }
+        boolean success = "OK".equals(AccountClient.value(response, "status"));
         JOptionPane.showMessageDialog(this,
-                "Đã gửi lời mời đến " + requestedUser.getUsername()
-                        + ". Người đó cần chấp nhận trước khi hai bên nhắn tin.",
-                "Đã gửi lời mời", JOptionPane.INFORMATION_MESSAGE);
+                AccountClient.value(response, "message"),
+                success ? "Đã gửi lời mời" : "Kết bạn",
+                success ? JOptionPane.INFORMATION_MESSAGE : JOptionPane.WARNING_MESSAGE);
     }
 
     private void showFriendRequests() {
-        List<String> requests =
-                friendStorage.getIncomingRequests(currentUser.getUsername());
-        if (requests == null) {
-            showFriendStorageError();
+        JsonObject friendData;
+        try {
+            friendData = accountClient.getFriendData(currentUser.getIdentity(),
+                    currentUser.getPassword());
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
+            return;
+        }
+        if (!"OK".equals(AccountClient.value(friendData, "status"))) {
+            showServerError(AccountClient.value(friendData, "message"));
+            return;
+        }
+        List<String> requests;
+        try {
+            requests = AccountClient.stringList(friendData, "requests");
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
             return;
         }
         friendRequestsButton.setText("Lời mời (" + requests.size() + ")");
@@ -540,37 +578,59 @@ public class ChatHomeUI extends JFrame {
             return;
         }
 
+        Object[] requestChoices = requests.stream()
+                .map(identity -> displayNameForIdentity(identity) + " (" + identity + ")")
+                .toArray();
         Object selected = JOptionPane.showInputDialog(this,
                 "Chọn người gửi lời mời:", "Lời mời kết bạn",
-                JOptionPane.QUESTION_MESSAGE, null, requests.toArray(),
-                requests.get(0));
+                JOptionPane.QUESTION_MESSAGE, null, requestChoices,
+                requestChoices[0]);
         if (selected == null) {
             return;
         }
-        String requester = selected.toString();
+        int selectedIndex = java.util.Arrays.asList(requestChoices).indexOf(selected);
+        if (selectedIndex < 0 || selectedIndex >= requests.size()) {
+            return;
+        }
+        String requester = requests.get(selectedIndex);
         Object[] choices = {"Chấp nhận", "Từ chối", "Để sau"};
         int answer = JOptionPane.showOptionDialog(this,
-                "Chấp nhận lời mời từ " + requester + "?",
+                "Chấp nhận lời mời từ " + displayNameForIdentity(requester) + "?",
                 "Lời mời kết bạn", JOptionPane.DEFAULT_OPTION,
                 JOptionPane.QUESTION_MESSAGE, null, choices, choices[0]);
         if (answer == 2 || answer == JOptionPane.CLOSED_OPTION) {
             return;
         }
 
-        boolean updated = answer == 0
-                ? friendStorage.acceptRequest(currentUser.getUsername(), requester)
-                : friendStorage.declineRequest(currentUser.getUsername(), requester);
-        if (!updated) {
-            showFriendStorageError();
+        JsonObject response;
+        try {
+            response = accountClient.respondFriendRequest(
+                    currentUser.getIdentity(), currentUser.getPassword(),
+                    requester, answer == 0);
+        } catch (IOException exception) {
+            showServerError(exception.getMessage());
+            return;
+        }
+        if (!"OK".equals(AccountClient.value(response, "status"))) {
+            showServerError(AccountClient.value(response, "message"));
             return;
         }
         refreshData();
     }
 
-    private void showFriendStorageError() {
+    private void showServerError(String details) {
+        String message = details == null || details.trim().isEmpty()
+                ? "Không thể hoàn tất thao tác trên máy chủ."
+                : details;
         JOptionPane.showMessageDialog(this,
-                "Không thể cập nhật bạn bè. Kiểm tra file ChatApp/data/friends.json.",
-                "Lỗi dữ liệu", JOptionPane.ERROR_MESSAGE);
+                message + "\nMáy chủ: " + serverHost + ":8080",
+                "Lỗi máy chủ", JOptionPane.ERROR_MESSAGE);
+    }
+
+    private String firstMessage(JsonObject first, JsonObject second) {
+        String message = AccountClient.value(first, "message");
+        return message == null || message.isEmpty()
+                ? AccountClient.value(second, "message") : message;
     }
 
     private static boolean containsIgnoreCase(List<String> values, String value) {
@@ -580,6 +640,27 @@ public class ChatHomeUI extends JFrame {
             }
         }
         return false;
+    }
+
+    private String displayNameForIdentity(String identity) {
+        if (currentUser.getIdentity().equalsIgnoreCase(identity)) {
+            return currentUser.getUsername();
+        }
+        for (User user : allUsers) {
+            if (user.getIdentity().equalsIgnoreCase(identity)) {
+                return user.getUsername();
+            }
+        }
+        return identity;
+    }
+
+    private java.util.Map<String, String> getDisplayNames() {
+        java.util.Map<String, String> names = new java.util.HashMap<String, String>();
+        names.put(currentUser.getIdentity(), currentUser.getUsername());
+        for (User user : allUsers) {
+            names.put(user.getIdentity(), user.getUsername());
+        }
+        return names;
     }
 
     private void createGroup() {
@@ -595,14 +676,14 @@ public class ChatHomeUI extends JFrame {
             return;
         }
 
-        if (allUsers.isEmpty()) {
+        if (allPeople.isEmpty()) {
             JOptionPane.showMessageDialog(this,
                     "Cần có ít nhất một người bạn trước khi tạo nhóm.",
                     "Tạo nhóm", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
 
-        JList<User> members = new JList<User>(allUsers.toArray(new User[0]));
+        JList<User> members = new JList<User>(allPeople.toArray(new User[0]));
         members.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         members.setFixedCellHeight(62);
         members.setCellRenderer(new PersonRenderer());
@@ -623,9 +704,9 @@ public class ChatHomeUI extends JFrame {
         }
 
         GroupManager manager = new GroupManager();
-        Group group = manager.createGroup(name, currentUser.getUsername());
+        Group group = manager.createGroup(name, currentUser.getIdentity());
         for (User member : selectedMembers) {
-            manager.addMemberToGroup(group.getGroupId(), member.getUsername());
+            manager.addMemberToGroup(group.getGroupId(), member.getIdentity());
         }
         if (!groupStorage.saveGroup(group)) {
             JOptionPane.showMessageDialog(this,
@@ -646,10 +727,8 @@ public class ChatHomeUI extends JFrame {
         }
         if (savedGroup != null) {
             groupsList.setSelectedValue(savedGroup, true);
-            showGroupDetails(savedGroup);
             openGroupChat(savedGroup);
         } else {
-            showGroupDetails(group);
             openGroupChat(group);
         }
     }
@@ -668,7 +747,7 @@ public class ChatHomeUI extends JFrame {
 
     private void openPrivateChat(User user) {
         if (embeddedChat != null
-                && embeddedChat.getReceiver().equals(user.getUsername())) {
+                && embeddedChat.getReceiver().equals(user.getIdentity())) {
             return;
         }
         switchingConversation = true;
@@ -676,7 +755,7 @@ public class ChatHomeUI extends JFrame {
             closeActiveConversation();
             closeEmbeddedChat();
             disconnectInbox();
-            ChatUI chat = new ChatUI(currentUser.getUsername(), user.getUsername());
+            ChatUI chat = new ChatUI(currentUser, user, serverHost);
             embeddedChat = chat;
             conversationBody.removeAll();
             conversationBody.add(chat, BorderLayout.CENTER);
@@ -689,31 +768,26 @@ public class ChatHomeUI extends JFrame {
     }
 
     private void openGroupChat(Group group) {
+        if (embeddedGroupChat != null
+                && embeddedGroupChat.getGroupId().equals(group.getGroupId())) {
+            return;
+        }
         switchingConversation = true;
         try {
             closeEmbeddedChat();
             closeActiveConversation();
             disconnectInbox();
-            GroupChatUI chat = new GroupChatUI(currentUser.getUsername(), group);
-            setActiveConversation(chat);
+            GroupChatUI chat = GroupChatUI.createEmbedded(
+                    currentUser.getIdentity(), group, serverHost, getDisplayNames());
+            embeddedGroupChat = chat;
+            conversationBody.removeAll();
+            conversationBody.add(chat, BorderLayout.CENTER);
+            ((CardLayout) detailsCards.getLayout()).show(detailsCards, "conversation");
+            conversationBody.revalidate();
+            conversationBody.repaint();
         } finally {
             switchingConversation = false;
         }
-    }
-
-    private void setActiveConversation(JFrame conversation) {
-        activeConversation = conversation;
-        conversation.addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent event) {
-                if (activeConversation == conversation) {
-                    activeConversation = null;
-                }
-                if (!switchingConversation && !closingHome) {
-                    connectInbox();
-                }
-            }
-        });
     }
 
     private void connectInbox() {
@@ -722,7 +796,7 @@ public class ChatHomeUI extends JFrame {
         }
 
         inboxStatus.setText("Đang kết nối máy chủ...");
-        ClientSocket socket = new ClientSocket("localhost", 8080);
+        ClientSocket socket = new ClientSocket(serverHost, 8080);
         if (!socket.connect()) {
             inboxStatus.setText("Không kết nối được máy chủ");
             return;
@@ -730,10 +804,10 @@ public class ChatHomeUI extends JFrame {
 
         inboxSocket = socket;
         socket.sendPacket("{\"type\":\"LOGIN\",\"username\":\""
-                + currentUser.getUsername().replace("\\", "\\\\")
+                + currentUser.getIdentity().replace("\\", "\\\\")
                 .replace("\"", "\\\"") + "\"}");
 
-        ChatInbox inbox = new ChatInbox(currentUser.getUsername(),
+        ChatInbox inbox = new ChatInbox(currentUser.getIdentity(),
                 historyManager, groupStorage, new ChatInbox.Listener() {
                     @Override
                     public void onPrivateMessage(String sender) {
@@ -745,6 +819,14 @@ public class ChatHomeUI extends JFrame {
                     public void onGroupMessage(String groupName) {
                         SwingUtilities.invokeLater(() ->
                                 inboxStatus.setText("Tin nhắn nhóm mới: " + groupName));
+                    }
+
+                    @Override
+                    public void onReceipt(String type, String receiver, String messageId) {
+                        socket.sendPacket("{\"type\":\"" + type + "\","
+                                + "\"sender\":\"" + currentUser.getIdentity() + "\","
+                                + "\"receiver\":\"" + receiver + "\","
+                                + "\"messageId\":\"" + messageId + "\"}");
                     }
 
                     @Override
@@ -774,10 +856,14 @@ public class ChatHomeUI extends JFrame {
     }
 
     private void closeActiveConversation() {
-        if (activeConversation != null) {
-            JFrame conversation = activeConversation;
-            activeConversation = null;
-            conversation.dispose();
+        if (embeddedGroupChat != null) {
+            GroupChatUI chat = embeddedGroupChat;
+            embeddedGroupChat = null;
+            chat.closeConversation();
+            conversationBody.remove(chat);
+            if (!switchingConversation && !closingHome) {
+                connectInbox();
+            }
         }
     }
 
@@ -800,10 +886,19 @@ public class ChatHomeUI extends JFrame {
         closeActiveConversation();
         closeEmbeddedChat();
         disconnectInbox();
-        StatusManager.getInstance().setStatus(currentUser.getUsername(), "OFFLINE");
+        StatusManager.getInstance().removeListener(this);
+        StatusManager.getInstance().setStatus(currentUser.getIdentity(), "OFFLINE");
         UserSession.getInstance().logout();
         new LoginUI().setVisible(true);
         dispose();
+    }
+
+    @Override
+    public void onStatusChanged(String identity, String status) {
+        SwingUtilities.invokeLater(() -> {
+            peopleList.repaint();
+            groupsList.repaint();
+        });
     }
 
     private static class PersonRenderer extends JPanel
@@ -828,9 +923,12 @@ public class ChatHomeUI extends JFrame {
             JLabel name = new JLabel(user.getUsername());
             name.setFont(new Font("Segoe UI", Font.BOLD, 14));
             name.setForeground(AppTheme.TEXT);
-            JLabel hint = new JLabel("Đã kết bạn");
+            boolean online = "ONLINE".equals(
+                    StatusManager.getInstance().getStatus(user.getIdentity()));
+            JLabel hint = new JLabel((online ? "● Đang hoạt động" : "● Ngoại tuyến")
+                    + (user.getPhoneNumber() == null ? "" : " · " + user.getPhoneNumber()));
             hint.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-            hint.setForeground(AppTheme.MUTED);
+            hint.setForeground(online ? new Color(0x22C55E) : new Color(0x8A929E));
             labels.add(name);
             labels.add(Box.createVerticalStrut(4));
             labels.add(hint);
@@ -839,7 +937,7 @@ public class ChatHomeUI extends JFrame {
         }
     }
 
-    private static class GroupRenderer extends JPanel
+    private class GroupRenderer extends JPanel
             implements javax.swing.ListCellRenderer<Group> {
 
         GroupRenderer() {
@@ -861,15 +959,64 @@ public class ChatHomeUI extends JFrame {
             JLabel name = new JLabel(group.getGroupName());
             name.setFont(new Font("Segoe UI", Font.BOLD, 14));
             name.setForeground(AppTheme.TEXT);
-            JLabel hint = new JLabel("Tạo bởi " + group.getCreator()
-                    + " · " + group.getMemberCount() + " thành viên");
-            hint.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-            hint.setForeground(AppTheme.MUTED);
+
+            JPanel adminLine = new JPanel(new FlowLayout(FlowLayout.LEFT, 3, 0));
+            adminLine.setOpaque(false);
+            JLabel adminCaption = new JLabel("Quản trị:");
+            adminCaption.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+            adminCaption.setForeground(AppTheme.MUTED);
+            adminLine.add(adminCaption);
+            adminLine.add(presenceLabel(group.getCreator()));
+
+            JPanel membersLine = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+            membersLine.setOpaque(false);
+            JLabel membersCaption = new JLabel("Thành viên:");
+            membersCaption.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+            membersCaption.setForeground(AppTheme.MUTED);
+            membersLine.add(membersCaption);
+            int visibleCount = 0;
+            int hiddenCount = 0;
+            for (String member : group.getMembers()) {
+                if (group.getCreator() != null
+                        && member.equalsIgnoreCase(group.getCreator())) {
+                    continue;
+                }
+                if (visibleCount < 2) {
+                    membersLine.add(presenceLabel(member));
+                    visibleCount++;
+                } else {
+                    hiddenCount++;
+                }
+            }
+            if (hiddenCount > 0) {
+                JLabel moreMembers = new JLabel("+" + hiddenCount);
+                moreMembers.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+                moreMembers.setForeground(AppTheme.MUTED);
+                membersLine.add(moreMembers);
+            } else if (visibleCount == 0) {
+                JLabel noMembers = new JLabel("Chưa có");
+                noMembers.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+                noMembers.setForeground(AppTheme.MUTED);
+                membersLine.add(noMembers);
+            }
+
             labels.add(name);
-            labels.add(Box.createVerticalStrut(4));
-            labels.add(hint);
+            labels.add(Box.createVerticalStrut(2));
+            labels.add(adminLine);
+            labels.add(membersLine);
             add(labels, BorderLayout.CENTER);
             return this;
+        }
+
+        private JLabel presenceLabel(String identity) {
+            boolean online = "ONLINE".equals(
+                    StatusManager.getInstance().getStatus(identity));
+            JLabel label = new JLabel("● "
+                    + (identity == null ? "Không rõ" : displayNameForIdentity(identity)));
+            label.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+            label.setForeground(online
+                    ? new Color(0x22C55E) : new Color(0x8A929E));
+            return label;
         }
     }
 

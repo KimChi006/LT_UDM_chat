@@ -17,6 +17,7 @@ public class FileInfo {
     private String receiver;
     private String groupId;
     private String time;
+    private String transferId;
 
     public FileInfo() {
     }
@@ -99,6 +100,14 @@ public class FileInfo {
         this.time = time;
     }
 
+    public String getTransferId() {
+        return transferId;
+    }
+
+    public void setTransferId(String transferId) {
+        this.transferId = transferId;
+    }
+
     public File getFile() {
         return filepath == null ? null : new File(filepath);
     }
@@ -125,6 +134,22 @@ public class FileInfo {
 
     @Override
     public String toString() {
-        return "[" + type + "] " + filename + " (" + getReadableSize() + ")";
+        return getTypeDisplayName() + ": " + filename + " (" + getReadableSize() + ")";
+    }
+
+    public String getTypeDisplayName() {
+        if (type == null) {
+            return "Tệp";
+        }
+        switch (type) {
+            case IMAGE:
+                return "Ảnh";
+            case VIDEO:
+                return "Video";
+            case SOUND:
+                return "Âm thanh";
+            default:
+                return "Tệp";
+        }
     }
 }

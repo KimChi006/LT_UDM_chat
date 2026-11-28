@@ -8,10 +8,16 @@ public class Message {
 
     private String type;
     private String sender;
+    private String senderName;
     private String receiver;
     private String content;
     private String time;
     private String groupId;
+    private String messageId;
+    private String transferId;
+    private String deliveryStatus;
+    private int deliveredCount;
+    private int readCount;
 
     // Only used for media messages, for example "media/images/photo.png".
     private String filepath;
@@ -55,6 +61,14 @@ public class Message {
         this.sender = sender;
     }
 
+    public String getSenderName() {
+        return senderName;
+    }
+
+    public void setSenderName(String senderName) {
+        this.senderName = senderName;
+    }
+
     public String getReceiver() {
         return receiver;
     }
@@ -93,5 +107,45 @@ public class Message {
 
     public void setFilepath(String filepath) {
         this.filepath = filepath;
+    }
+
+    public String getMessageId() {
+        return messageId;
+    }
+
+    public void setMessageId(String messageId) {
+        this.messageId = messageId;
+    }
+
+    public String getTransferId() {
+        return transferId;
+    }
+
+    public void setTransferId(String transferId) {
+        this.transferId = transferId;
+    }
+
+    public String getDeliveryStatus() {
+        return deliveryStatus;
+    }
+
+    public void setDeliveryStatus(String deliveryStatus) {
+        this.deliveryStatus = deliveryStatus;
+    }
+
+    public int getDeliveredCount() {
+        return deliveredCount;
+    }
+
+    public void setDeliveredCount(int deliveredCount) {
+        this.deliveredCount = Math.max(0, deliveredCount);
+    }
+
+    public int getReadCount() {
+        return readCount;
+    }
+
+    public void setReadCount(int readCount) {
+        this.readCount = Math.max(0, readCount);
     }
 }

@@ -1,5 +1,6 @@
 package storage;
 
+import auth.PhoneNumber;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -54,8 +55,11 @@ public class UserStorage {
 
             String password = readString(object, "password");
             String status = readString(object, "status");
+            String phoneNumber = PhoneNumber.normalize(
+                    readString(object, "phoneNumber"));
             users.add(new User(
                     username,
+                    phoneNumber,
                     password == null ? "" : password,
                     status == null ? "OFFLINE" : status
             ));
@@ -76,6 +80,10 @@ public class UserStorage {
 
             JsonObject object = new JsonObject();
             object.addProperty("username", user.getUsername());
+            if (user.getPhoneNumber() != null
+                    && !user.getPhoneNumber().trim().isEmpty()) {
+                object.addProperty("phoneNumber", user.getPhoneNumber());
+            }
             object.addProperty("password", user.getPassword() == null ? "" : user.getPassword());
             object.addProperty("status", user.getStatus() == null ? "OFFLINE" : user.getStatus());
             array.add(object);
@@ -106,9 +114,36 @@ public class UserStorage {
         return findByUsername(username) != null;
     }
 
-    /** Adds one account only when the username is still free. */
+    public User findByPhoneNumber(String phoneNumber) {
+        String normalized = PhoneNumber.normalize(phoneNumber);
+        if (normalized == null) {
+            return null;
+        }
+        List<User> users = loadAll();
+        if (users == null) {
+            return null;
+        }
+        for (User user : users) {
+            if (normalized.equals(user.getPhoneNumber())) {
+                return user;
+            }
+        }
+        return null;
+    }
+
+    public User findByIdentity(String identity) {
+        User byPhone = findByPhoneNumber(identity);
+        if (byPhone != null) {
+            return byPhone;
+        }
+        User byLegacyName = findByUsername(identity);
+        return byLegacyName != null && byLegacyName.getPhoneNumber() == null
+                ? byLegacyName : null;
+    }
+
+    /** Adds accounts with unique phone numbers; display names may be shared. */
     public boolean addUser(User user) {
-        if (user == null || user.getUsername() == null || exists(user.getUsername())) {
+        if (user == null || user.getUsername() == null) {
             return false;
         }
 
@@ -116,6 +151,16 @@ public class UserStorage {
         if (users == null) {
             return false;
         }
+        String phoneNumber = PhoneNumber.normalize(user.getPhoneNumber());
+        if (phoneNumber == null) {
+            return false;
+        }
+        for (User existing : users) {
+            if (phoneNumber.equals(existing.getPhoneNumber())) {
+                return false;
+            }
+        }
+        user.setPhoneNumber(phoneNumber);
 
         users.add(user);
         return saveAll(users);

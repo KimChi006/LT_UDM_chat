@@ -8,8 +8,7 @@ import java.awt.*;
 import java.io.File;
 
 /**
- * Small stand-alone window to test the media module without ChatUI.
- * Start ServerMain first, then run this class twice (two users).
+ * Cửa sổ kiểm tra gửi tệp khi không mở ChatUI.
  */
 public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
 
@@ -20,7 +19,7 @@ public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
     private FileInfo lastReceived;
 
     public MediaDemo(String username, String receiver) {
-        setTitle("Media demo - " + username + " -> " + receiver);
+        setTitle("Thử gửi tệp - " + username + " đến " + receiver);
         setSize(520, 420);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
         setLocationRelativeTo(null);
@@ -29,8 +28,8 @@ public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
         log.setEditable(false);
         add(new JScrollPane(log), BorderLayout.CENTER);
 
-        JButton sendButton = new JButton("Send file...");
-        JButton openButton = new JButton("Open last received");
+        JButton sendButton = new JButton("Gửi tệp...");
+        JButton openButton = new JButton("Mở tệp vừa nhận");
         JPanel bottom = new JPanel(new FlowLayout(FlowLayout.LEFT));
         bottom.add(sendButton);
         bottom.add(openButton);
@@ -38,25 +37,25 @@ public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
 
         clientSocket = new ClientSocket("localhost", 8080);
         if (!clientSocket.connect()) {
-            log("[System] Cannot connect to server.");
+            log("Không thể kết nối máy chủ.");
             sendButton.setEnabled(false);
         } else {
             clientSocket.sendPacket("{\"type\":\"LOGIN\",\"username\":\""
                     + FileTransferClient.escape(username) + "\"}");
             new MessageListener(clientSocket, this).start();
-            log("[System] Connected as " + username);
+            log("Đã kết nối với tài khoản " + username);
         }
 
         mediaManager = new MediaManager(clientSocket, username, new MediaManager.MediaListener() {
             @Override
             public void onMediaReceived(FileInfo info) {
                 lastReceived = info;
-                log(info.getSender() + " sent " + info + " -> " + info.getFilepath());
+                log(info.getSender() + " đã gửi " + info + " → " + info.getFilepath());
             }
 
             @Override
             public void onMediaSent(FileInfo info) {
-                log("Sent " + info);
+                log("Đã gửi " + info);
             }
 
             @Override
@@ -68,7 +67,7 @@ public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
 
             @Override
             public void onMediaError(String message) {
-                log("[Error] " + message);
+                log("Lỗi: " + message);
             }
         });
 
@@ -97,16 +96,16 @@ public class MediaDemo extends JFrame implements MessageListener.PacketHandler {
 
     @Override
     public void onDisconnected() {
-        log("[System] Disconnected from server.");
+        log("Đã mất kết nối máy chủ.");
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            String username = JOptionPane.showInputDialog(null, "Your username:");
+            String username = JOptionPane.showInputDialog(null, "Tên người dùng:");
             if (username == null || username.trim().isEmpty()) {
                 return;
             }
-            String receiver = JOptionPane.showInputDialog(null, "Send to which user?");
+            String receiver = JOptionPane.showInputDialog(null, "Gửi đến người dùng nào?");
             if (receiver == null || receiver.trim().isEmpty()) {
                 return;
             }

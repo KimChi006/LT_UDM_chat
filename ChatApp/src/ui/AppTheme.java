@@ -61,7 +61,7 @@ public final class AppTheme {
         field.setBackground(SURFACE);
         field.setBorder(BorderFactory.createCompoundBorder(
                 new RoundedBorder(BORDER, 9),
-                BorderFactory.createEmptyBorder(9, 12, 9, 12)));
+                BorderFactory.createEmptyBorder(4, 12, 4, 12)));
     }
 
     public static void styleChatArea(JTextArea area) {

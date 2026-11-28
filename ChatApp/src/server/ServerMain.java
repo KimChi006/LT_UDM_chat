@@ -18,6 +18,7 @@ public class ServerMain {
     private ServerSocket serverSocket;
     private final ConcurrentMap<String, ClientHandler> clients;
     private final MessageRouter messageRouter;
+    private final AccountService accountService;
     private final ExecutorService clientExecutor;
     private final int port;
     private volatile boolean running;
@@ -27,9 +28,17 @@ public class ServerMain {
     }
 
     public ServerMain(int port) {
+        this(port, new AccountService());
+    }
+
+    public ServerMain(int port, AccountService accountService) {
+        if (accountService == null) {
+            throw new IllegalArgumentException("Account service is required.");
+        }
         this.port = port;
         clients = new ConcurrentHashMap<String, ClientHandler>();
         messageRouter = new MessageRouter(clients);
+        this.accountService = accountService;
         clientExecutor = Executors.newFixedThreadPool(MAX_CLIENT);
     }
 
@@ -63,7 +72,8 @@ public class ServerMain {
 
             while (running) {
                 Socket clientSocket = serverSocket.accept();
-                ClientHandler clientHandler = new ClientHandler(clientSocket, messageRouter, this);
+                ClientHandler clientHandler = new ClientHandler(
+                        clientSocket, messageRouter, this);
                 clientExecutor.execute(clientHandler);
             }
         } catch (IOException exception) {
@@ -124,6 +134,10 @@ public class ServerMain {
 
     public MessageRouter getMessageRouter() {
         return messageRouter;
+    }
+
+    public AccountService getAccountService() {
+        return accountService;
     }
 
     public boolean isRunning() {

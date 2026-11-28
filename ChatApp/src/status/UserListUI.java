@@ -65,7 +65,9 @@ public class UserListUI extends JPanel implements StatusManager.StatusListener {
                     list, value, index, isSelected, hasFocus);
             String username = String.valueOf(value);
             String status = StatusManager.getInstance().getStatus(username);
-            label.setText(username + "  [" + status + "]");
+            label.setText(username + "  ["
+                    + ("ONLINE".equals(status) ? "Đang hoạt động" : "Ngoại tuyến")
+                    + "]");
             label.setForeground("ONLINE".equals(status)
                     ? new Color(36, 145, 87)
                     : new Color(120, 120, 120));

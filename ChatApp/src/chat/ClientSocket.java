@@ -74,6 +74,11 @@ public class ClientSocket {
                 && !socket.isClosed();
     }
 
+    public String getLocalAddress() {
+        return socket == null || socket.isClosed()
+                ? null : socket.getLocalAddress().getHostAddress();
+    }
+
     public void close() {
         Socket socketToClose = socket;
         BufferedReader readerToClose = reader;

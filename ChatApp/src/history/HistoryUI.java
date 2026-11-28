@@ -35,16 +35,16 @@ public class HistoryUI extends JFrame {
     private final HistoryManager historyManager = HistoryManager.getInstance();
 
     private final JComboBox<String> modeCombo =
-            new JComboBox<String>(new String[]{"Private", "Group"});
-    private final JLabel firstLabel = new JLabel("User A");
+            new JComboBox<String>(new String[]{"Riêng tư", "Nhóm"});
+    private final JLabel firstLabel = new JLabel("Người dùng A");
     private final JTextField firstField = new JTextField(14);
-    private final JLabel secondLabel = new JLabel("User B");
+    private final JLabel secondLabel = new JLabel("Người dùng B");
     private final JTextField secondField = new JTextField(18);
     private final JTextArea historyArea = new JTextArea();
-    private final JButton groupsButton = new JButton("Groups...");
+    private final JButton groupsButton = new JButton("Chọn nhóm...");
 
     public HistoryUI() {
-        super("Chat history");
+        super("Lịch sử trò chuyện");
         buildInterface();
         setSize(650, 450);
         setLocationRelativeTo(null);
@@ -61,7 +61,7 @@ public class HistoryUI extends JFrame {
 
         constraints.gridx = 0;
         constraints.gridy = 0;
-        top.add(new JLabel("Mode:"), constraints);
+        top.add(new JLabel("Chế độ:"), constraints);
 
         constraints.gridx = 1;
         top.add(modeCombo, constraints);
@@ -84,7 +84,7 @@ public class HistoryUI extends JFrame {
         historyArea.setWrapStyleWord(true);
 
         JPanel buttons = new JPanel();
-        JButton loadButton = new JButton("Load history");
+        JButton loadButton = new JButton("Tải lịch sử");
         loadButton.addActionListener(event -> loadHistory());
         groupsButton.addActionListener(event -> chooseGroup());
         groupsButton.setVisible(false);
@@ -99,10 +99,10 @@ public class HistoryUI extends JFrame {
     }
 
     private void updateMode() {
-        boolean groupMode = "Group".equals(modeCombo.getSelectedItem());
-        firstLabel.setText(groupMode ? "Ignore" : "User A");
+        boolean groupMode = "Nhóm".equals(modeCombo.getSelectedItem());
+        firstLabel.setText(groupMode ? "Không dùng" : "Người dùng A");
         firstField.setEnabled(!groupMode);
-        secondLabel.setText(groupMode ? "Group ID" : "User B");
+        secondLabel.setText(groupMode ? "Mã nhóm" : "Người dùng B");
         groupsButton.setVisible(groupMode);
         historyArea.setText("");
     }
@@ -111,7 +111,7 @@ public class HistoryUI extends JFrame {
     private void chooseGroup() {
         List<Group> groups = new GroupStorage().loadAll();
         if (groups == null || groups.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "No groups are saved yet.");
+            JOptionPane.showMessageDialog(this, "Chưa có nhóm nào được lưu.");
             return;
         }
 
@@ -122,7 +122,7 @@ public class HistoryUI extends JFrame {
 
         String[] options = ids.toArray(new String[ids.size()]);
         String chosen = (String) JOptionPane.showInputDialog(
-                this, "Choose a group:", "Saved groups",
+                this, "Chọn một nhóm:", "Nhóm đã lưu",
                 JOptionPane.QUESTION_MESSAGE, null, options, options[0]
         );
         if (chosen != null) {
@@ -134,22 +134,22 @@ public class HistoryUI extends JFrame {
         String first = firstField.getText().trim();
         String second = secondField.getText().trim();
 
-        if (second.isEmpty() || (!"Group".equals(modeCombo.getSelectedItem()) && first.isEmpty())) {
+        if (second.isEmpty() || (!"Nhóm".equals(modeCombo.getSelectedItem()) && first.isEmpty())) {
             JOptionPane.showMessageDialog(this,
-                    "Please fill in the user names or the group id.",
-                    "History", JOptionPane.WARNING_MESSAGE);
+                    "Hãy nhập tên người dùng hoặc mã nhóm.",
+                    "Lịch sử", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         List<Message> messages;
-        if ("Group".equals(modeCombo.getSelectedItem())) {
+        if ("Nhóm".equals(modeCombo.getSelectedItem())) {
             messages = historyManager.getGroupHistory(second);
         } else {
             messages = historyManager.getPrivateHistory(first, second);
         }
 
         String text = historyManager.formatHistory(messages);
-        historyArea.setText(text.isEmpty() ? "(no messages)" : text);
+        historyArea.setText(text.isEmpty() ? "(Chưa có tin nhắn)" : text);
         historyArea.setCaretPosition(0);
     }
 

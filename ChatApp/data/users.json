@@ -1,4 +1,14 @@
 [
-  {"username":"chi","password":"12345","status":"OFFLINE"},
-  {"username":"hoa","password":"12345","status":"OFFLINE"}
+  {
+    "username": "chi",
+    "phoneNumber": "0254631578",
+    "password": "123456",
+    "status": "OFFLINE"
+  },
+  {
+    "username": "hoa",
+    "phoneNumber": "1234567895",
+    "password": "123456",
+    "status": "OFFLINE"
+  }
 ]

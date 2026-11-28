@@ -11,10 +11,10 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
-import javax.swing.SwingConstants;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.BoxLayout;
+import com.google.gson.JsonObject;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -23,31 +23,25 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import javax.swing.Box;
-import java.io.BufferedWriter;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class LoginUI extends JFrame {
 
     private final JTextField usernameField;
     private final JPasswordField passwordField;
+    private final JTextField serverHostField;
 
     public LoginUI() {
-        super("Chat App");
+        super("UDM Chat - Đăng nhập");
         usernameField = new JTextField(18);
         passwordField = new JPasswordField(18);
+        String defaultHost = System.getenv("UDM_CHAT_SERVER_HOST");
+        serverHostField = new JTextField(
+                defaultHost == null || defaultHost.trim().isEmpty()
+                        ? "localhost" : defaultHost.trim(), 18);
         buildInterface();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(430, 390);
+        setSize(440, 520);
         setResizable(false);
         setLocationRelativeTo(null);
     }
@@ -85,7 +79,7 @@ public class LoginUI extends JFrame {
         form.add(heading, constraints);
 
         constraints.gridy = 1;
-        JLabel usernameLabel = new JLabel("Tài khoản");
+        JLabel usernameLabel = new JLabel("Số điện thoại");
         usernameLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
         usernameLabel.setForeground(new Color(0x1F2D3D));
         form.add(usernameLabel, constraints);
@@ -102,13 +96,27 @@ public class LoginUI extends JFrame {
         constraints.gridy = 4;
         form.add(passwordField, constraints);
 
-        usernameField.setPreferredSize(new Dimension(300, 42));
-        passwordField.setPreferredSize(new Dimension(300, 42));
+        constraints.gridy = 5;
+        JLabel serverLabel = new JLabel("Máy chủ");
+        serverLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        serverLabel.setForeground(new Color(0x1F2D3D));
+        form.add(serverLabel, constraints);
+
+        constraints.gridy = 6;
+        form.add(serverHostField, constraints);
+
+        usernameField.setPreferredSize(new Dimension(300, 48));
+        passwordField.setPreferredSize(new Dimension(300, 48));
+        serverHostField.setPreferredSize(new Dimension(300, 48));
         ui.AppTheme.styleTextField(usernameField);
         ui.AppTheme.styleTextField(passwordField);
+        ui.AppTheme.styleTextField(serverHostField);
+        usernameField.setToolTipText("Nhập số điện thoại đã đăng ký");
+        serverHostField.setToolTipText(
+                "Nhập localhost, địa chỉ IP hoặc tên máy chủ VPN");
 
-        JButton loginButton = createPrimaryButton("Login");
-        JButton registerButton = createSecondaryButton("Create account");
+        JButton loginButton = createPrimaryButton("Đăng nhập");
+        JButton registerButton = createSecondaryButton("Đăng ký");
         loginButton.addActionListener(event -> login());
         registerButton.addActionListener(event ->
                 new RegisterUI(this).setVisible(true));
@@ -149,150 +157,60 @@ public class LoginUI extends JFrame {
     }
 
     private void login() {
-        String username = usernameField.getText().trim();
+        String phoneNumber = usernameField.getText().trim();
         String password = new String(passwordField.getPassword());
-        if (username.isEmpty() || password.isEmpty()) {
+        String serverHost = getServerHost();
+        if (phoneNumber.isEmpty() || password.isEmpty() || serverHost.isEmpty()) {
             JOptionPane.showMessageDialog(this,
-                    "Please enter username and password.", "Login",
+                    "Nhập số điện thoại, mật khẩu và địa chỉ máy chủ.",
+                    "Đăng nhập",
                     JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        User user = authenticate(username, password);
-        if (user == null) {
+        JsonObject response;
+        try {
+            response = new AccountClient(serverHost)
+                    .authenticate(phoneNumber, password);
+        } catch (IOException exception) {
             JOptionPane.showMessageDialog(this,
-                    "Invalid username or password.", "Login",
-                    JOptionPane.ERROR_MESSAGE);
+                    "Không kết nối được máy chủ " + serverHost
+                            + ":8080.\nKiểm tra máy chủ đang chạy, địa chỉ IP "
+                            + "và tường lửa.",
+                    "Lỗi kết nối", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        if (!"OK".equals(AccountClient.value(response, "status"))) {
+            JOptionPane.showMessageDialog(this,
+                    AccountClient.value(response, "message"),
+                    "Đăng nhập", JOptionPane.ERROR_MESSAGE);
             return;
         }
 
-        user.setStatus("ONLINE");
+        String canonicalUsername = AccountClient.value(response, "username");
+        if (canonicalUsername == null || canonicalUsername.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this,
+                    "Máy chủ trả về tài khoản không hợp lệ.",
+                    "Lỗi máy chủ", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        String canonicalPhone = AccountClient.value(response, "phoneNumber");
+        User user = new User(canonicalUsername, canonicalPhone, password, "ONLINE");
         UserSession.getInstance().login(user);
-        StatusManager.getInstance().setStatus(username, "ONLINE");
-        new ChatHomeUI(user).setVisible(true);
+        StatusManager.getInstance().setStatus(user.getIdentity(), "ONLINE");
+        new ChatHomeUI(user, serverHost).setVisible(true);
         dispose();
     }
 
-    public boolean registerAccount(String username, String password) {
-        List<User> users = loadUsers();
-        for (User user : users) {
-            if (username.equalsIgnoreCase(user.getUsername())) {
-                return false;
-            }
-        }
-        users.add(new User(username, password, "OFFLINE"));
-        return saveUsers(users);
+    public String getServerHost() {
+        return serverHostField.getText().trim();
     }
 
-    private User authenticate(String username, String password) {
-        for (User user : loadUsers()) {
-            if (username.equalsIgnoreCase(user.getUsername())
-                    && password.equals(user.getPassword())) {
-                return user;
-            }
-        }
-        return null;
-    }
-
-    private Path getUserStoragePath() {
-        Path current = Paths.get(System.getProperty("user.dir"));
-        Path chatApp = current.resolve("ChatApp").resolve("data").resolve("users.json");
-        if (Files.exists(chatApp)) {
-            return chatApp;
-        }
-        return current.resolve("data").resolve("users.json");
-    }
-
-    private List<User> loadUsers() {
-        List<User> users = new ArrayList<User>();
-        Path path = getUserStoragePath();
-        if (!Files.exists(path)) {
-            return users;
-        }
-        try {
-            String json = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).trim();
-            if (json.isEmpty()) {
-                return users;
-            }
-            if (json.startsWith("[") && json.endsWith("]")) {
-                json = json.substring(1, json.length() - 1).trim();
-            }
-            if (json.isEmpty()) {
-                return users;
-            }
-            Pattern objectPattern = Pattern.compile("\\{[^{}]*\\}");
-            Matcher objectMatcher = objectPattern.matcher(json);
-            while (objectMatcher.find()) {
-                Map<String, String> fields = parseJsonObject(objectMatcher.group());
-                String username = fields.get("username");
-                String password = fields.get("password");
-                String status = fields.get("status");
-                if (username != null) {
-                    users.add(new User(username, password == null ? "" : password,
-                            status == null ? "OFFLINE" : status));
-                }
-            }
-        } catch (IOException exception) {
-            System.err.println("Cannot read users: " + exception.getMessage());
-        }
-        return users;
-    }
-
-    private boolean saveUsers(List<User> users) {
-        Path path = getUserStoragePath();
-        try {
-            if (path.getParent() != null) {
-                Files.createDirectories(path.getParent());
-            }
-            try (BufferedWriter writer = Files.newBufferedWriter(
-                    path, StandardCharsets.UTF_8)) {
-                writer.write("[\n");
-                for (int index = 0; index < users.size(); index++) {
-                    User user = users.get(index);
-                    writer.write("  {\"username\":\"" + escapeJson(user.getUsername())
-                            + "\",\"password\":\"" + escapeJson(user.getPassword())
-                            + "\",\"status\":\"" + escapeJson(user.getStatus()) + "\"}");
-                    writer.write(index == users.size() - 1 ? "\n" : ",\n");
-                }
-                writer.write("]\n");
-            }
-            return true;
-        } catch (IOException exception) {
-            System.err.println("Cannot save users: " + exception.getMessage());
-            return false;
-        }
-    }
-
-    private Map<String, String> parseJsonObject(String object) {
-        Map<String, String> fields = new LinkedHashMap<String, String>();
-        Pattern pattern = Pattern.compile(
-                "\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"\\s*:\\s*\"([^\"\\\\]*(?:\\\\.[^\"\\\\]*)*)\"");
-        Matcher matcher = pattern.matcher(object);
-        while (matcher.find()) {
-            fields.put(unescapeJson(matcher.group(1)),
-                    unescapeJson(matcher.group(2)));
-        }
-        return fields;
-    }
-
-    private String escapeJson(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\b", "\\b")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
-
-    private String unescapeJson(String value) {
-        return value.replace("\\\"", "\"")
-                .replace("\\\\", "\\")
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\t", "\t");
+    public JsonObject registerAccount(String username, String phoneNumber,
+                                      String password)
+            throws IOException {
+        return new AccountClient(getServerHost())
+                .register(username, phoneNumber, password);
     }
 
     public static void main(String[] args) {

@@ -1,5 +1,6 @@
 package chat;
 
+import auth.UserSession;
 import group.Group;
 import history.HistoryManager;
 import storage.GroupStorage;
@@ -37,13 +38,19 @@ public final class ChatInbox implements MessageListener.PacketHandler {
         String type = fields.get("type");
         String sender = fields.get("sender");
         String content = fields.get("content");
+        String messageId = fields.get("messageId");
+        String senderName = fields.get("senderName");
         String time = LocalDateTime.now().format(TIME_FORMAT);
 
         if ("MESSAGE".equals(type)
                 && username.equals(fields.get("receiver"))
                 && sender != null
                 && content != null) {
-            historyManager.savePrivateMessage(sender, username, content, time);
+            historyManager.savePrivateMessage(sender, username, content, time,
+                    messageId, null);
+            if (messageId != null) {
+                listener.onReceipt("DELIVERED", sender, messageId);
+            }
             listener.onPrivateMessage(sender);
             return;
         }
@@ -65,8 +72,15 @@ public final class ChatInbox implements MessageListener.PacketHandler {
             return;
         }
         for (Group group : groups) {
-            if (group.getGroupId().equals(groupId) && group.isMember(username)) {
-                historyManager.saveGroupMessage(sender, groupId, content, time);
+            String displayUsername = UserSession.getInstance().getUsername();
+            if (group.getGroupId().equals(groupId)
+                    && (group.isMember(username)
+                    || (displayUsername != null && group.isMember(displayUsername)))) {
+                historyManager.saveGroupMessage(sender, senderName, groupId,
+                        content, time, messageId);
+                if (messageId != null) {
+                    listener.onReceipt("DELIVERED", sender, messageId);
+                }
                 listener.onGroupMessage(group.getGroupName());
                 return;
             }
@@ -82,5 +96,7 @@ public final class ChatInbox implements MessageListener.PacketHandler {
         void onPrivateMessage(String sender);
         void onGroupMessage(String groupName);
         void onDisconnected();
+        default void onReceipt(String type, String receiver, String messageId) {
+        }
     }
 }

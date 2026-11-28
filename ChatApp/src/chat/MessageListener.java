@@ -1,5 +1,7 @@
 package chat;
 
+import status.StatusManager;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 
@@ -45,8 +47,8 @@ public class MessageListener implements Runnable {
 
         try {
             String packet;
-
             while (running && (packet = reader.readLine()) != null) {
+                StatusManager.getInstance().updateFromPacket(packet);
                 packetHandler.onPacketReceived(packet);
             }
 

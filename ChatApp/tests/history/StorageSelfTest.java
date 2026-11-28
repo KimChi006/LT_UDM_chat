@@ -1,5 +1,6 @@
 package history;
 
+import auth.PhoneNumber;
 import chat.Message;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -127,14 +128,50 @@ public class StorageSelfTest {
         MessageStorage reopened = new MessageStorage(new JsonStorage(file));
         check("data survives close and reopen", reopened.loadAll().size() == 6);
 
+        File receiptFile = new File(root, "receipt-messages.json");
+        MessageStorage receiptStorage =
+                new MessageStorage(new JsonStorage(receiptFile));
+        Message receiptMessage = message("GROUP_MESSAGE", "0900000001", null,
+                "hello group", "group-receipts", "2026-11-22 10:35:30");
+        receiptMessage.setSenderName("Chi");
+        receiptMessage.setMessageId("receipt-message-1");
+        receiptMessage.setDeliveryStatus("Đã gửi");
+        check("save group sender name and receipt state",
+                receiptStorage.save(receiptMessage));
+        check("advance group receipt to delivered",
+                receiptStorage.updateDeliveryStatus("receipt-message-1", "Đã nhận"));
+        Message savedReceipt = new MessageStorage(new JsonStorage(receiptFile))
+                .getGroupHistory("group-receipts").get(0);
+        check("sender name and receipt state survive reopen",
+                "Chi".equals(savedReceipt.getSenderName())
+                        && "Đã nhận".equals(savedReceipt.getDeliveryStatus()));
+
         FileInfo image = new FileInfo(PacketType.IMAGE, "pic.png", 123L,
                 "media/images/pic.png", "chi", "nam", null, "2026-11-22 10:36:00");
+        image.setTransferId("transfer-one");
         check("save private media", storage.saveMedia(image));
         Message savedImage = storage.loadAll().get(storage.loadAll().size() - 1);
         check("media filename becomes content", "pic.png".equals(savedImage.getContent()));
         check("media type is stored", "IMAGE".equals(savedImage.getType()));
         check("media filepath is stored", "media/images/pic.png".equals(savedImage.getFilepath()));
         check("media time is stored", "2026-11-22 10:36:00".equals(savedImage.getTime()));
+        check("media transfer id is stored",
+                "transfer-one".equals(savedImage.getTransferId()));
+        FileInfo duplicateImage = new FileInfo(PacketType.IMAGE, "pic.png", 123L,
+                "media/images/pic_copy.png", "chi", "nam", null, "2026-11-22 10:36:01");
+        duplicateImage.setTransferId("transfer-one");
+        check("same transfer is stored only once", storage.saveMedia(duplicateImage)
+                && storage.getPrivateHistory("chi", "nam").stream()
+                .filter(message -> "transfer-one".equals(message.getTransferId()))
+                .count() == 1);
+        FileInfo secondTransfer = new FileInfo(PacketType.IMAGE, "pic.png", 123L,
+                "media/images/pic.png", "chi", "nam", null, "2026-11-22 10:36:02");
+        secondTransfer.setTransferId("transfer-two");
+        check("separate sends of the same file remain separate",
+                storage.saveMedia(secondTransfer)
+                        && storage.getPrivateHistory("chi", "nam").stream()
+                        .filter(message -> message.getTransferId() != null)
+                        .count() == 2);
 
         FileInfo groupFile = new FileInfo(PacketType.FILE, "doc.pdf", 10L,
                 "media/files/doc.pdf", "nam", null, "group-1", "2026-11-22 10:37:00");
@@ -152,14 +189,23 @@ public class StorageSelfTest {
         UserStorage storage = new UserStorage(new JsonStorage(file));
         check("users file starts empty", storage.loadAll().size() == 0);
 
-        storage.addUser(new User("chi", "pw1", "OFFLINE"));
-        storage.addUser(new User("nam", "pw2", "ONLINE"));
+        storage.addUser(new User("Chi", "0900000001", "pw1", "OFFLINE"));
+        storage.addUser(new User("Chi", "0900000002", "pw2", "ONLINE"));
         check("two users saved", storage.loadAll().size() == 2);
-        check("find user ignoring case", storage.findByUsername("CHI") != null);
-        check("duplicate username is rejected", !storage.addUser(new User("chi", "other", "OFFLINE")));
+        check("display name lookup ignoring case", storage.findByUsername("CHI") != null);
+        check("phone lookup finds account",
+                storage.findByPhoneNumber("090 000 0002") != null);
+        check("duplicate display name is allowed",
+                storage.addUser(new User("Chi", "0900000003", "pw3", "OFFLINE")));
+        check("duplicate phone number is rejected",
+                !storage.addUser(new User("Someone", "0900000001", "other", "OFFLINE")));
+        check("phone number requires ten digits",
+                "0900000001".equals(PhoneNumber.normalize("090 000 0001"))
+                        && PhoneNumber.normalize("090000001") == null
+                        && PhoneNumber.normalize("09000000011") == null);
 
         UserStorage reopened = new UserStorage(new JsonStorage(file));
-        check("users survive close and reopen", reopened.loadAll().size() == 2);
+        check("users survive close and reopen", reopened.loadAll().size() == 3);
     }
 
     private static void testGroupStorage(File root) throws Exception {
@@ -224,7 +270,7 @@ public class StorageSelfTest {
         manager.saveMedia(media);
         String withMedia = manager.formatHistory(manager.getPrivateHistory("chi", "nam"));
         check("media is marked in formatted history",
-                withMedia.contains("[Media]") && withMedia.contains("song.mp3"));
+                withMedia.contains("[Tệp]") && withMedia.contains("song.mp3"));
 
         HistoryManager reopened = new HistoryManager(new MessageStorage(new JsonStorage(file)));
         check("history survives close and reopen",

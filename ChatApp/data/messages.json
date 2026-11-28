@@ -176,5 +176,114 @@
     "receiver": "chi",
     "content": "hiiiiiiiiiiiiiii",
     "time": "2026-11-28 13:32:03"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "0254631578",
+    "receiver": "1234567895",
+    "content": "hi",
+    "time": "2026-11-28 14:44:07",
+    "messageId": "bf1b8aa1-f817-4ebd-af24-87b6810a800c",
+    "deliveryStatus": "Đã đọc"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "1234567895",
+    "receiver": "0254631578",
+    "content": "chi",
+    "time": "2026-11-28 14:44:17",
+    "messageId": "9783f0e7-9276-427e-875c-547e8740ca79",
+    "deliveryStatus": "Đã đọc"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "0254631578",
+    "receiver": "1234567895",
+    "content": "hi",
+    "time": "2026-11-28 14:44:35",
+    "messageId": "89f9a4c8-1adb-4dbd-a835-e6682a093263",
+    "deliveryStatus": "Đã đọc"
+  },
+  {
+    "type": "SOUND",
+    "sender": "1234567895",
+    "receiver": "0254631578",
+    "content": "ghi-am-510a4f65-75e3-4b3c-85b0-e0cfab743b79.wav",
+    "time": "2026-11-28 14:45:35",
+    "filepath": "media\\sounds\\ghi-am-510a4f65-75e3-4b3c-85b0-e0cfab743b79.wav"
+  },
+  {
+    "type": "SOUND",
+    "sender": "1234567895",
+    "receiver": "0254631578",
+    "content": "ghi-am-510a4f65-75e3-4b3c-85b0-e0cfab743b79_1.wav",
+    "time": "2026-11-28 14:45:35",
+    "filepath": "media/sounds/ghi-am-510a4f65-75e3-4b3c-85b0-e0cfab743b79_1.wav"
+  },
+  {
+    "type": "SOUND",
+    "sender": "1234567895",
+    "receiver": "0254631578",
+    "content": "ghi-am-d585666e-838c-4c95-8bfe-01d96a9bb064.wav",
+    "time": "2026-11-28 15:25:38",
+    "filepath": "media\\sounds\\ghi-am-d585666e-838c-4c95-8bfe-01d96a9bb064.wav",
+    "transferId": "71c43220-0bd9-4154-bbbf-c56ec71ddeaf"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "0254631578",
+    "receiver": "1234567895",
+    "content": "😂",
+    "time": "2026-11-28 15:26:48",
+    "messageId": "ee09f1d3-7589-4571-9ada-0df2c6cd9c2d",
+    "deliveryStatus": "Đã đọc"
+  },
+  {
+    "type": "VIDEO",
+    "sender": "0254631578",
+    "receiver": "1234567895",
+    "content": "1128 (2)(1).mp4",
+    "time": "2026-11-28 15:27:04",
+    "filepath": "D:\\CapCut\\1128 (2)(1).mp4",
+    "transferId": "f02c5cbd-1061-47bf-96df-6e9e5cc9472a"
+  },
+  {
+    "type": "GROUP_MESSAGE",
+    "sender": "0254631578",
+    "senderName": "chi",
+    "content": "jjj",
+    "time": "2026-11-28 15:27:55",
+    "groupId": "27f50741-5a09-44fe-9692-617bd73b019c",
+    "messageId": "5b156494-ff7e-4554-a52c-1c2ff638f4b6",
+    "deliveryStatus": "Đã đọc"
+  },
+  {
+    "type": "SOUND",
+    "sender": "0254631578",
+    "receiver": "1234567895",
+    "content": "ghi-am-dd3eb9e4-58e3-47b6-9f43-df6432cec0c3.wav",
+    "time": "2026-11-28 15:41:28",
+    "filepath": "media\\sounds\\ghi-am-dd3eb9e4-58e3-47b6-9f43-df6432cec0c3.wav",
+    "transferId": "ee8ed4a0-53f4-422e-987c-9c5d9c5c42ed"
+  },
+  {
+    "type": "GROUP_MESSAGE",
+    "sender": "0254631578",
+    "senderName": "chi",
+    "content": ",khjh",
+    "time": "2026-11-28 15:42:55",
+    "groupId": "27f50741-5a09-44fe-9692-617bd73b019c",
+    "messageId": "25ca1a99-120c-435f-8d9a-d9bb28a8c3d9",
+    "deliveryStatus": "Đã đọc"
+  },
+  {
+    "type": "GROUP_MESSAGE",
+    "sender": "0254631578",
+    "senderName": "chi",
+    "content": "🤣",
+    "time": "2026-11-28 15:43:01",
+    "groupId": "27f50741-5a09-44fe-9692-617bd73b019c",
+    "messageId": "c8bd75e1-7dd5-436b-b29b-d941c4d8a593",
+    "deliveryStatus": "Đã đọc"
   }
 ]

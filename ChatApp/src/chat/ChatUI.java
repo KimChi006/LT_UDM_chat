@@ -4,8 +4,11 @@ import emoji.EmojiPickerPopup;
 import emoji.EmojiTextRenderer;
 import history.HistoryManager;
 import media.FileInfo;
+import media.AudioRecorder;
+import media.MediaAttachmentView;
 import media.MediaManager;
 import model.PacketType;
+import model.User;
 import ui.AppTheme;
 
 import javax.swing.*;
@@ -14,12 +17,17 @@ import java.awt.event.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 public class ChatUI extends JPanel implements MessageListener.PacketHandler {
 
     private final String username;
     private final String receiver;
+    private final String receiverDisplayName;
+    private final String serverHost;
 
     private ClientSocket clientSocket;
     private MessageListener messageListener;
@@ -33,12 +41,39 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
     private JButton attachButton;
     private JButton mediaButton;
     private JButton emojiButton;
+    private JButton recordButton;
+    private AudioRecorder audioRecorder;
     private EmojiPickerPopup emojiPicker;
     private boolean conversationClosed;
+    private java.awt.Window focusWindow;
+    private final WindowAdapter focusListener = new WindowAdapter() {
+        @Override
+        public void windowGainedFocus(WindowEvent event) {
+            markHistoryAsRead();
+        }
+    };
+    private final Map<String, JLabel> messageStatusLabels =
+            new HashMap<String, JLabel>();
 
     public ChatUI(String username, String receiver) {
+        this(username, receiver, receiver, "localhost");
+    }
+
+    public ChatUI(String username, String receiver, String serverHost) {
+        this(username, receiver, receiver, serverHost);
+    }
+
+    public ChatUI(User currentUser, User receiver, String serverHost) {
+        this(currentUser.getIdentity(), receiver.getIdentity(),
+                receiver.getUsername(), serverHost);
+    }
+
+    private ChatUI(String username, String receiver, String receiverDisplayName,
+                   String serverHost) {
         this.username = username;
         this.receiver = receiver;
+        this.receiverDisplayName = receiverDisplayName;
+        this.serverHost = serverHost;
 
         initializeUI();
         loadHistory();
@@ -55,13 +90,14 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
                 BorderFactory.createMatteBorder(0, 0, 1, 0, AppTheme.BORDER),
                 BorderFactory.createEmptyBorder(14, 20, 14, 20)
         ));
-        JLabel title = new JLabel(receiver);
+        JLabel title = new JLabel(receiverDisplayName);
         title.setFont(new Font("Segoe UI", Font.BOLD, 18));
         title.setForeground(AppTheme.TEXT);
         JLabel subtitle = new JLabel("Cuộc trò chuyện riêng");
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         subtitle.setForeground(AppTheme.MUTED);
-        JLabel avatar = new JLabel(new chat.ChatHomeUI.AvatarIcon(receiver, 42));
+        JLabel avatar = new JLabel(
+                new chat.ChatHomeUI.AvatarIcon(receiverDisplayName, 42));
         avatar.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 12));
         header.add(avatar, BorderLayout.WEST);
         JPanel titlePanel = new JPanel(new GridLayout(2, 1, 0, 3));
@@ -93,14 +129,16 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         messageField.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 14));
         sendButton = new JButton("Gửi");
         attachButton = new JButton("Tệp");
-        mediaButton = new JButton("Media (0)");
-        emojiButton = new JButton("Emoji");
+        mediaButton = new JButton("Tệp đã gửi (0)");
+        emojiButton = new JButton("Biểu tượng");
+        recordButton = new JButton("Ghi âm");
         attachButton.setEnabled(false);
         mediaButton.setEnabled(false);
         AppTheme.styleButton(sendButton, true);
         AppTheme.styleButton(attachButton, false);
         AppTheme.styleButton(mediaButton, false);
         AppTheme.styleButton(emojiButton, false);
+        AppTheme.styleButton(recordButton, false);
         emojiPicker = new EmojiPickerPopup((symbol, sticker) -> {
             if (sticker) {
                 sendSticker(symbol);
@@ -114,6 +152,7 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         actionsPanel.add(mediaButton);
         actionsPanel.add(attachButton);
         actionsPanel.add(emojiButton);
+        actionsPanel.add(recordButton);
         actionsPanel.add(sendButton);
 
         inputPanel.add(messageField, BorderLayout.CENTER);
@@ -124,18 +163,38 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         sendButton.addActionListener(e -> sendMessage());
         attachButton.addActionListener(e -> chooseAndSendMedia());
         emojiButton.addActionListener(e -> emojiPicker.showAt(emojiButton));
+        recordButton.addActionListener(e -> toggleRecording());
         mediaButton.addActionListener(e ->
                 MediaManager.chooseAndOpenMedia(this, getConversationMedia()));
 
         messageField.addActionListener(e -> sendMessage());
+        addHierarchyListener(event -> {
+            if ((event.getChangeFlags() & java.awt.event.HierarchyEvent.PARENT_CHANGED) != 0) {
+                updateFocusWindow();
+            }
+        });
 
     }
 
+    private void updateFocusWindow() {
+        java.awt.Window newWindow = SwingUtilities.getWindowAncestor(this);
+        if (focusWindow == newWindow) {
+            return;
+        }
+        if (focusWindow != null) {
+            focusWindow.removeWindowFocusListener(focusListener);
+        }
+        focusWindow = newWindow;
+        if (focusWindow != null) {
+            focusWindow.addWindowFocusListener(focusListener);
+        }
+    }
+
     private void connectToServer() {
-        clientSocket = new ClientSocket("localhost", 8080);
+        clientSocket = new ClientSocket(serverHost, 8080);
 
         if (!clientSocket.connect()) {
-            appendMessage("[System] Cannot connect to server.");
+            appendMessage("Không thể kết nối máy chủ.");
             sendButton.setEnabled(false);
             messageField.setEnabled(false);
             attachButton.setEnabled(false);
@@ -153,27 +212,28 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
             @Override
             public void onMediaReceived(FileInfo info) {
                 historyManager.saveMedia(info);
-                SwingUtilities.invokeLater(() -> showMedia(info, " received"));
+                SwingUtilities.invokeLater(() -> showMedia(info, false));
             }
 
             @Override
             public void onMediaSent(FileInfo info) {
                 historyManager.saveMedia(info);
-                SwingUtilities.invokeLater(() -> showMedia(info, " sent"));
+                SwingUtilities.invokeLater(() -> showMedia(info, true));
             }
 
             @Override
             public void onMediaError(String message) {
-                SwingUtilities.invokeLater(() -> appendMessage("[Media error] " + message));
+                SwingUtilities.invokeLater(() -> appendMessage("Lỗi gửi tệp: " + message));
             }
         });
 
         messageListener = new MessageListener(clientSocket, this);
         messageListener.start();
+        markHistoryAsRead();
         attachButton.setEnabled(true);
         emojiButton.setEnabled(true);
-
-        appendMessage("[System] Connected to server.");
+        recordButton.setEnabled(true);
+        appendMessage("Đã kết nối máy chủ.");
     }
 
     private void chooseAndSendMedia() {
@@ -183,9 +243,40 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         }
     }
 
-    private void showMedia(FileInfo info, String action) {
-        String verb = action.contains("sent") ? "Đã gửi: " : "Đã nhận: ";
-        appendChatMessage(info.getSender(), verb + info.getFilename(), info.getTime());
+    private void toggleRecording() {
+        if (mediaManager == null) {
+            return;
+        }
+        if (audioRecorder == null) {
+            AudioRecorder recorder = new AudioRecorder();
+            try {
+                recorder.start();
+                audioRecorder = recorder;
+                recordButton.setText("Dừng ghi");
+                appendMessage("Đang ghi âm...");
+            } catch (Exception exception) {
+                JOptionPane.showMessageDialog(this,
+                        "Không thể bắt đầu ghi âm. Hãy kiểm tra micro.\n"
+                                + exception.getMessage(),
+                        "Lỗi ghi âm", JOptionPane.ERROR_MESSAGE);
+            }
+            return;
+        }
+
+        AudioRecorder recorder = audioRecorder;
+        audioRecorder = null;
+        recordButton.setText("Ghi âm");
+        try {
+            java.io.File recording = recorder.stopAndSave();
+            mediaManager.sendMedia(receiver, null, recording);
+        } catch (java.io.IOException exception) {
+            JOptionPane.showMessageDialog(this, exception.getMessage(),
+                    "Lỗi ghi âm", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void showMedia(FileInfo info, boolean sent) {
+        appendMediaMessage(info);
         updateMediaButton();
     }
 
@@ -195,9 +286,13 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
             PacketType type = MediaManager.toMediaType(message.getType());
             if (type != null && message.getFilepath() != null
                     && !message.getFilepath().trim().isEmpty()) {
-                files.add(new FileInfo(type, message.getContent(), 0,
+                java.io.File file = new java.io.File(message.getFilepath());
+                FileInfo info = new FileInfo(type, message.getContent(),
+                        file.isFile() ? file.length() : 0,
                         message.getFilepath(), message.getSender(),
-                        message.getReceiver(), message.getGroupId(), message.getTime()));
+                        message.getReceiver(), message.getGroupId(), message.getTime());
+                info.setTransferId(message.getTransferId());
+                files.add(info);
             }
         }
         return files;
@@ -205,7 +300,7 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
 
     private void updateMediaButton() {
         int count = getConversationMedia().size();
-        mediaButton.setText("Media (" + count + ")");
+        mediaButton.setText("Tệp đã gửi (" + count + ")");
         mediaButton.setEnabled(count > 0);
     }
 
@@ -229,14 +324,16 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         }
 
         if (clientSocket == null || !clientSocket.isConnected()) {
-            appendMessage("[System] Not connected to server.");
+            appendMessage("Chưa kết nối máy chủ.");
             return;
         }
 
+        String messageId = UUID.randomUUID().toString();
         String packet = "{\"type\":\"MESSAGE\","
                 + "\"sender\":\"" + escapeJson(username) + "\","
                 + "\"receiver\":\"" + escapeJson(receiver) + "\","
-                + "\"content\":\"" + escapeJson(content) + "\"}";
+                + "\"content\":\"" + escapeJson(content) + "\","
+                + "\"messageId\":\"" + messageId + "\"}";
 
         clientSocket.sendPacket(packet);
 
@@ -244,8 +341,9 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
                 DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         );
 
-        appendChatMessage(username, content, time);
-        historyManager.savePrivateMessage(username, receiver, content, time);
+        appendChatMessage(username, content, time, messageId, "Đã gửi");
+        historyManager.savePrivateMessage(username, receiver, content, time,
+                messageId, "Đã gửi");
 
         if (clearInput) {
             messageField.setText("");
@@ -258,12 +356,23 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
             return;
         }
 
-        String type = extractJsonValue(packet, "type");
-        String sender = extractJsonValue(packet, "sender");
-        String content = extractJsonValue(packet, "content");
-        String packetReceiver = extractJsonValue(packet, "receiver");
+        Map<String, String> fields = ChatPacketParser.parse(packet);
+        String type = fields.get("type");
+        if (type != null && type.startsWith("CALL_")) {
+            return;
+        }
+        String sender = fields.get("sender");
+        String content = fields.get("content");
+        String packetReceiver = fields.get("receiver");
+        String messageId = fields.get("messageId");
 
-        // Only display relevant chat messages
+        if (("DELIVERED".equals(type) || "READ".equals(type))
+                && username.equals(packetReceiver) && messageId != null) {
+            String status = "READ".equals(type) ? "Đã đọc" : "Đã nhận";
+            SwingUtilities.invokeLater(() -> updateMessageStatus(messageId, status));
+            return;
+        }
+
         if ("MESSAGE".equals(type)
                 && username.equals(packetReceiver)
                 && sender != null
@@ -274,31 +383,54 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
                     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             );
 
-            historyManager.savePrivateMessage(sender, username, content, time);
+            historyManager.savePrivateMessage(sender, username, content, time,
+                    messageId, null);
 
-            SwingUtilities.invokeLater(() -> appendChatMessage(sender, content, time));
+            SwingUtilities.invokeLater(() -> {
+                appendChatMessage(sender, content, time, messageId, null);
+                if (messageId != null) {
+                    sendReceipt("DELIVERED", sender, messageId);
+                    if (isConversationActive()) {
+                        if (sendReceipt("READ", sender, messageId)) {
+                            historyManager.updateDeliveryStatus(messageId, "Đã đọc");
+                        }
+                    }
+                }
+            });
         }
     }
 
     @Override
     public void onDisconnected() {
         SwingUtilities.invokeLater(() -> {
-            appendMessage("[System] Disconnected from server.");
+            appendMessage("Đã mất kết nối máy chủ.");
             sendButton.setEnabled(false);
             messageField.setEnabled(false);
             attachButton.setEnabled(false);
             emojiButton.setEnabled(false);
+            recordButton.setEnabled(false);
         });
     }
 
     private void loadHistory() {
         for (Message message : historyManager.getPrivateHistory(username, receiver)) {
-            String content = message.getContent();
             if (message.getFilepath() != null
                     && !message.getFilepath().trim().isEmpty()) {
-                content = "Tệp: " + content;
+                PacketType type = MediaManager.toMediaType(message.getType());
+                if (type != null) {
+                    java.io.File file = new java.io.File(message.getFilepath());
+                    FileInfo info = new FileInfo(type, message.getContent(),
+                            file.isFile() ? file.length() : 0,
+                            message.getFilepath(), message.getSender(),
+                            message.getReceiver(), message.getGroupId(), message.getTime());
+                    info.setTransferId(message.getTransferId());
+                    appendMediaMessage(info);
+                    continue;
+                }
             }
-            appendChatMessage(message.getSender(), content, message.getTime());
+            String content = message.getContent();
+            appendChatMessage(message.getSender(), content, message.getTime(),
+                    message.getMessageId(), message.getDeliveryStatus());
         }
         updateMediaButton();
     }
@@ -315,7 +447,8 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         refreshMessages();
     }
 
-    private void appendChatMessage(String sender, String content, String time) {
+    private void appendChatMessage(String sender, String content, String time,
+                                   String messageId, String deliveryStatus) {
         boolean outgoing = sender != null && sender.equalsIgnoreCase(username);
         Color bubbleColor = outgoing
                 ? new Color(0xDCEBFF) : AppTheme.SURFACE;
@@ -341,6 +474,15 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         timestamp.setForeground(AppTheme.MUTED);
         bubble.add(timestamp, BorderLayout.SOUTH);
 
+        if (outgoing && messageId != null) {
+            JLabel status = new JLabel(deliveryStatus == null ? "Đã gửi" : deliveryStatus,
+                    SwingConstants.RIGHT);
+            status.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+            status.setForeground(AppTheme.MUTED);
+            bubble.add(status, BorderLayout.NORTH);
+            messageStatusLabels.put(messageId, status);
+        }
+
         JPanel row = new JPanel(new BorderLayout());
         row.setOpaque(false);
         row.setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 0));
@@ -349,6 +491,64 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
                 Math.max(42, bubble.getPreferredSize().height + 6)));
         messagesPanel.add(row);
         refreshMessages();
+    }
+
+    private void appendMediaMessage(FileInfo info) {
+        boolean outgoing = info.getSender() != null
+                && info.getSender().equalsIgnoreCase(username);
+        Color bubbleColor = outgoing
+                ? new Color(0xDCEBFF) : AppTheme.SURFACE;
+        MessageBubble bubble = new MessageBubble(bubbleColor);
+        bubble.setLayout(new BorderLayout(0, 4));
+        bubble.add(new MediaAttachmentView(this, info), BorderLayout.CENTER);
+        JLabel timestamp = new JLabel(formatTime(info.getTime()), SwingConstants.RIGHT);
+        timestamp.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        timestamp.setForeground(AppTheme.MUTED);
+        bubble.add(timestamp, BorderLayout.SOUTH);
+
+        JPanel row = new JPanel(new BorderLayout());
+        row.setOpaque(false);
+        row.setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 0));
+        row.add(bubble, outgoing ? BorderLayout.EAST : BorderLayout.WEST);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE,
+                Math.max(42, bubble.getPreferredSize().height + 6)));
+        messagesPanel.add(row);
+        refreshMessages();
+    }
+
+    private void markHistoryAsRead() {
+        for (Message message : historyManager.getPrivateHistory(username, receiver)) {
+            if (message.getMessageId() != null
+                    && !username.equalsIgnoreCase(message.getSender())
+                    && !"Đã đọc".equals(message.getDeliveryStatus())
+                    && sendReceipt("READ", message.getSender(), message.getMessageId())) {
+                historyManager.updateDeliveryStatus(message.getMessageId(), "Đã đọc");
+            }
+        }
+    }
+
+    private boolean isConversationActive() {
+        java.awt.Window window = SwingUtilities.getWindowAncestor(this);
+        return isShowing() && window != null && window.isActive();
+    }
+
+    private boolean sendReceipt(String type, String sender, String messageId) {
+        if (clientSocket == null || !clientSocket.isConnected()) {
+            return false;
+        }
+        clientSocket.sendPacket("{\"type\":\"" + type + "\","
+                + "\"sender\":\"" + escapeJson(username) + "\","
+                + "\"receiver\":\"" + escapeJson(sender) + "\","
+                + "\"messageId\":\"" + escapeJson(messageId) + "\"}");
+        return true;
+    }
+
+    private void updateMessageStatus(String messageId, String status) {
+        JLabel label = messageStatusLabels.get(messageId);
+        if (label != null) {
+            label.setText(status);
+        }
+        historyManager.updateDeliveryStatus(messageId, status);
     }
 
     private String formatTime(String time) {
@@ -374,6 +574,10 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
         conversationClosed = true;
         if (mediaManager != null) {
             mediaManager.shutdown();
+        }
+        if (audioRecorder != null) {
+            audioRecorder.cancel();
+            audioRecorder = null;
         }
         if (messageListener != null) {
             messageListener.stop();
@@ -415,75 +619,10 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
                 .replace("\t", "\\t");
     }
 
-    private String extractJsonValue(String json, String key) {
-        String searchKey = "\"" + key + "\":";
-        int keyIndex = json.indexOf(searchKey);
-
-        if (keyIndex == -1) {
-            // Also handle JSON with spaces before colon
-            searchKey = "\"" + key + "\"";
-            keyIndex = json.indexOf(searchKey);
-
-            if (keyIndex == -1) {
-                return null;
-            }
-
-            int colonIndex = json.indexOf(':', keyIndex + searchKey.length());
-
-            if (colonIndex == -1) {
-                return null;
-            }
-
-            keyIndex = colonIndex;
-        }
-
-        int start = json.indexOf('"', keyIndex + searchKey.length());
-
-        if (start == -1) {
-            start = json.indexOf('"', keyIndex + 1);
-        }
-
-        if (start == -1) {
-            return null;
-        }
-
-        StringBuilder result = new StringBuilder();
-        boolean escaped = false;
-
-        for (int i = start + 1; i < json.length(); i++) {
-            char c = json.charAt(i);
-
-            if (escaped) {
-                switch (c) {
-                    case 'n':
-                        result.append('\n');
-                        break;
-                    case 'r':
-                        result.append('\r');
-                        break;
-                    case 't':
-                        result.append('\t');
-                        break;
-                    default:
-                        result.append(c);
-                }
-                escaped = false;
-            } else if (c == '\\') {
-                escaped = true;
-            } else if (c == '"') {
-                return result.toString();
-            } else {
-                result.append(c);
-            }
-        }
-
-        return null;
-    }
-
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             String username = JOptionPane.showInputDialog(
-                    null, "Enter your username:"
+                    null, "Nhập tên hiển thị:"
             );
 
             if (username == null || username.trim().isEmpty()) {
@@ -491,7 +630,7 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
             }
 
             String receiver = JOptionPane.showInputDialog(
-                    null, "Chat with which user?"
+                    null, "Trò chuyện với ai?"
             );
 
             if (receiver == null || receiver.trim().isEmpty()) {
@@ -499,8 +638,8 @@ public class ChatUI extends JPanel implements MessageListener.PacketHandler {
             }
 
             ChatUI chat = new ChatUI(username.trim(), receiver.trim());
-            JFrame frame = new JFrame("Chat - " + username.trim()
-                    + " with " + receiver.trim());
+            JFrame frame = new JFrame("Trò chuyện - " + username.trim()
+                    + " với " + receiver.trim());
             frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
             frame.setContentPane(chat);
             frame.setSize(900, 660);

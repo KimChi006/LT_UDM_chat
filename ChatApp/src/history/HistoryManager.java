@@ -51,12 +51,50 @@ public class HistoryManager {
         messageStorage.save(message);
     }
 
+    public synchronized void savePrivateMessage(String sender, String receiver,
+                                                 String content, String time,
+                                                 String messageId,
+                                                 String deliveryStatus) {
+        Message message = new Message("MESSAGE", sender, receiver, content,
+                time == null || time.trim().isEmpty() ? now() : time, null);
+        message.setMessageId(messageId);
+        message.setDeliveryStatus(deliveryStatus);
+        messageStorage.save(message);
+    }
+
     public synchronized void saveGroupMessage(String sender, String groupId,
                                                String content, String time) {
         String savedTime = time == null || time.trim().isEmpty() ? now() : time;
         messageStorage.save(new Message(
                 "GROUP_MESSAGE", sender, null, content, savedTime, groupId
         ));
+    }
+
+    public synchronized void saveGroupMessage(String sender, String groupId,
+                                               String content, String time,
+                                               String messageId) {
+        saveGroupMessage(sender, null, groupId, content, time, messageId);
+    }
+
+    public synchronized void saveGroupMessage(String sender, String senderName,
+                                               String groupId, String content,
+                                               String time, String messageId) {
+        Message message = new Message("GROUP_MESSAGE", sender, null, content,
+                time == null || time.trim().isEmpty() ? now() : time, groupId);
+        message.setSenderName(senderName);
+        message.setMessageId(messageId);
+        messageStorage.save(message);
+    }
+
+    public synchronized boolean updateDeliveryStatus(String messageId, String status) {
+        return messageStorage.updateDeliveryStatus(messageId, status);
+    }
+
+    public synchronized boolean updateGroupReceiptCounts(String messageId,
+                                                          int deliveredCount,
+                                                          int readCount) {
+        return messageStorage.updateGroupReceiptCounts(
+                messageId, deliveredCount, readCount);
     }
 
     public synchronized void saveMedia(FileInfo info) {
@@ -83,9 +121,10 @@ public class HistoryManager {
         StringBuilder text = new StringBuilder();
         for (Message message : messages) {
             if (message.getFilepath() != null && !message.getFilepath().trim().isEmpty()) {
-                text.append("[Media] ");
+                text.append("[Tệp] ");
             }
-            text.append(message.getSender())
+            text.append(message.getSenderName() == null
+                            ? message.getSender() : message.getSenderName())
                     .append(" [")
                     .append(message.getTime())
                     .append("]: ")

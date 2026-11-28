@@ -3,6 +3,7 @@ package server;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +20,7 @@ public class ClientHandler implements Runnable {
     private final Socket socket;
     private final MessageRouter messageRouter;
     private final ServerMain serverMain;
+    private final AccountService accountService;
     private BufferedReader reader;
     private PrintWriter writer;
     private volatile boolean running;
@@ -36,6 +38,8 @@ public class ClientHandler implements Runnable {
         this.socket = socket;
         this.messageRouter = messageRouter != null ? messageRouter : new MessageRouter();
         this.serverMain = serverMain;
+        this.accountService = serverMain == null
+                ? new AccountService() : serverMain.getAccountService();
     }
 
     @Override
@@ -44,7 +48,8 @@ public class ClientHandler implements Runnable {
         try {
             reader = new BufferedReader(new InputStreamReader(
                     socket.getInputStream(), StandardCharsets.UTF_8));
-            writer = new PrintWriter(socket.getOutputStream(), true);
+            writer = new PrintWriter(new OutputStreamWriter(
+                    socket.getOutputStream(), StandardCharsets.UTF_8), true);
 
             String packet;
             while (running && (packet = reader.readLine()) != null) {
@@ -64,6 +69,12 @@ public class ClientHandler implements Runnable {
             return;
         }
 
+        com.google.gson.JsonObject accountResponse = accountService.handle(packet);
+        if (accountResponse != null) {
+            sendPacket(accountResponse.toString());
+            return;
+        }
+
         Map<String, String> fields = parsePacket(packet);
         String type = value(fields, "type");
         String sender = value(fields, "sender");
@@ -75,6 +86,12 @@ public class ClientHandler implements Runnable {
                 messageRouter.registerClient(username, this);
                 if (serverMain != null) {
                     serverMain.registerClient(username, this);
+                }
+                for (String onlineUser : messageRouter.getClients().keySet()) {
+                    if (!username.equals(onlineUser)) {
+                        sendPacket("{\"type\":\"STATUS\",\"username\":\""
+                                + escape(onlineUser) + "\",\"status\":\"ONLINE\"}");
+                    }
                 }
                 sendPacket("{\"type\":\"STATUS\",\"username\":\"" + escape(username)
                         + "\",\"status\":\"ONLINE\"}");

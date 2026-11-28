@@ -16,6 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -66,6 +67,8 @@ public class FileTransferClient {
     private final String username;
     private final Map<String, Incoming> incoming =
             new ConcurrentHashMap<String, Incoming>();
+    private final Set<String> completedTransfers =
+            ConcurrentHashMap.newKeySet();
 
     public FileTransferClient(ClientSocket clientSocket, String username) {
         this.clientSocket = clientSocket;
@@ -83,19 +86,19 @@ public class FileTransferClient {
     public FileInfo sendFile(String receiver, String groupId, File file,
                              ProgressListener progress) throws IOException {
         if (file == null || !file.isFile() || !file.canRead()) {
-            throw new IOException("File does not exist or cannot be read");
+            throw new IOException("Tệp không tồn tại hoặc không thể đọc.");
         }
 
         long size = file.length();
         if (size > MediaManager.MAX_FILE_SIZE) {
-            throw new IOException("File is too large (max "
-                    + (MediaManager.MAX_FILE_SIZE / (1024 * 1024)) + " MB)");
+            throw new IOException("Tệp quá lớn (tối đa "
+                    + (MediaManager.MAX_FILE_SIZE / (1024 * 1024)) + " MB).");
         }
 
         boolean isGroup = groupId != null && !groupId.trim().isEmpty();
         boolean hasReceiver = receiver != null && !receiver.trim().isEmpty();
         if (!isGroup && !hasReceiver) {
-            throw new IOException("Receiver or group is required");
+            throw new IOException("Cần chọn người nhận hoặc nhóm.");
         }
 
         PacketType type = MediaManager.detectType(file);
@@ -117,12 +120,12 @@ public class FileTransferClient {
 
             for (int index = 0; index < totalChunks; index++) {
                 if (!clientSocket.isConnected()) {
-                    throw new IOException("Connection to server was lost");
+                    throw new IOException("Đã mất kết nối máy chủ.");
                 }
 
                 int read = readFully(in, buffer);
                 if (read <= 0 && size > 0) {
-                    throw new IOException("File changed while sending");
+                    throw new IOException("Tệp đã thay đổi trong khi gửi.");
                 }
 
                 byte[] part = read == buffer.length ? buffer : Arrays.copyOf(buffer, Math.max(read, 0));
@@ -139,9 +142,11 @@ public class FileTransferClient {
             }
         }
 
-        return new FileInfo(type, file.getName(), size, file.getPath(),
+        FileInfo info = new FileInfo(type, file.getName(), size, file.getPath(),
                 username, isGroup ? null : receiver.trim(),
                 isGroup ? groupId.trim() : null, now());
+        info.setTransferId(transferId);
+        return info;
     }
 
     // ------------------------------------------------------------------
@@ -182,10 +187,13 @@ public class FileTransferClient {
 
         String transferId = extract(packet, "transferid");
         if (transferId == null || transferId.isEmpty()) {
-            throw new IOException("Media packet has no transferid");
+            throw new IOException("Gói dữ liệu không có mã truyền.");
         }
 
         String key = sender + "|" + transferId;
+        if (completedTransfers.contains(key)) {
+            return null;
+        }
         int index = (int) parseLong(extract(packet, "chunkindex"), -1);
         String data = extract(packet, "data");
         if (data == null) {
@@ -193,18 +201,20 @@ public class FileTransferClient {
         }
         if (data.length() > MAX_ENCODED_CHUNK) {
             abort(key);
-            throw new IOException("Chunk is too large");
+            throw new IOException("Phần dữ liệu quá lớn.");
         }
 
         Incoming transfer;
         if (index == 0) {
-            abort(key);
+            if (incoming.containsKey(key)) {
+                return null;
+            }
             transfer = startTransfer(packet, packetType, sender, receiver, groupId);
             incoming.put(key, transfer);
         } else {
             transfer = incoming.get(key);
             if (transfer == null) {
-                throw new IOException("Received a chunk of an unknown transfer");
+                throw new IOException("Nhận được phần dữ liệu không thuộc lượt truyền nào.");
             }
         }
 
@@ -217,7 +227,7 @@ public class FileTransferClient {
             byte[] bytes = Base64.getDecoder().decode(data);
             transfer.written += bytes.length;
             if (transfer.written > transfer.expectedSize) {
-                throw new IOException("Received more data than expected");
+                throw new IOException("Dữ liệu nhận được vượt quá kích thước dự kiến.");
             }
             transfer.out.write(bytes);
             transfer.nextIndex++;
@@ -238,13 +248,25 @@ public class FileTransferClient {
             throw new IOException("File is incomplete: " + transfer.filename);
         }
 
-        File finalFile = uniqueFile(MediaManager.getFolder(transfer.type), transfer.filename);
-        Files.move(transfer.tempFile.toPath(), finalFile.toPath(),
-                StandardCopyOption.REPLACE_EXISTING);
+        File folder = MediaManager.getFolder(transfer.type);
+        File existing = new File(folder, transfer.filename);
+        File finalFile;
+        if (existing.isFile() && existing.length() == transfer.written
+                && Files.mismatch(existing.toPath(), transfer.tempFile.toPath()) == -1) {
+            Files.delete(transfer.tempFile.toPath());
+            finalFile = existing;
+        } else {
+            finalFile = uniqueFile(folder, transfer.filename);
+            Files.move(transfer.tempFile.toPath(), finalFile.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+        }
+        completedTransfers.add(key);
 
-        return new FileInfo(transfer.type, finalFile.getName(), transfer.written,
+        FileInfo info = new FileInfo(transfer.type, finalFile.getName(), transfer.written,
                 MediaManager.toRelativePath(transfer.type, finalFile.getName()),
                 transfer.sender, transfer.receiver, transfer.groupId, now());
+        info.setTransferId(transferId);
+        return info;
     }
 
     private Incoming startTransfer(String packet, PacketType type, String sender,
@@ -254,10 +276,10 @@ public class FileTransferClient {
         int maxChunks = (int) (MediaManager.MAX_FILE_SIZE / CHUNK_SIZE) + 1;
 
         if (size < 0 || size > MediaManager.MAX_FILE_SIZE) {
-            throw new IOException("Invalid or too large filesize");
+            throw new IOException("Kích thước tệp không hợp lệ hoặc quá lớn.");
         }
         if (total < 1 || total > maxChunks) {
-            throw new IOException("Invalid number of chunks");
+            throw new IOException("Số phần dữ liệu không hợp lệ.");
         }
 
         Incoming transfer = new Incoming();

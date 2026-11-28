@@ -23,6 +23,8 @@ import java.awt.Image;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -274,7 +276,7 @@ public class MediaManager {
     /** Opens a file chooser and returns the selected file, or null. */
     public static File chooseFile(Component parent) {
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Choose a file to send");
+        chooser.setDialogTitle("Chọn tệp để gửi");
         if (chooser.showOpenDialog(parent) == JFileChooser.APPROVE_OPTION) {
             return chooser.getSelectedFile();
         }
@@ -287,12 +289,24 @@ public class MediaManager {
      */
     public static void openMedia(Component parent, FileInfo info) {
         if (info == null || info.getFile() == null || !info.getFile().exists()) {
-            JOptionPane.showMessageDialog(parent, "File not found.");
+            JOptionPane.showMessageDialog(parent, "Không tìm thấy tệp.");
             return;
         }
 
         if (info.isImage()) {
             showImage(parent, info);
+            return;
+        }
+
+        if (info.getType() == PacketType.VIDEO
+                || info.getType() == PacketType.SOUND) {
+            JDialog dialog = new JDialog(
+                    parent == null ? null : SwingUtilities.getWindowAncestor(parent),
+                    info.getFilename(), JDialog.ModalityType.MODELESS);
+            dialog.add(new MediaAttachmentView(parent, info));
+            dialog.pack();
+            dialog.setLocationRelativeTo(parent);
+            dialog.setVisible(true);
             return;
         }
 
@@ -302,18 +316,56 @@ public class MediaManager {
                 Desktop.getDesktop().open(info.getFile());
             } else {
                 JOptionPane.showMessageDialog(parent,
-                        "Saved to " + info.getFile().getAbsolutePath());
+                        "Đã lưu tại " + info.getFile().getAbsolutePath());
             }
         } catch (IOException | RuntimeException e) {
             JOptionPane.showMessageDialog(parent,
-                    "Cannot open file: " + e.getMessage());
+                    "Không thể mở tệp: " + e.getMessage());
+        }
+    }
+
+    public static void downloadMedia(Component parent, FileInfo info) {
+        if (info == null || info.getFile() == null || !info.getFile().isFile()) {
+            JOptionPane.showMessageDialog(parent, "Không tìm thấy tệp để tải xuống.");
+            return;
+        }
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Lưu tệp vào máy");
+        chooser.setSelectedFile(new File(info.getFilename()));
+        if (chooser.showSaveDialog(parent) != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File destination = chooser.getSelectedFile();
+        if (destination.toPath().toAbsolutePath().normalize()
+                .equals(info.getFile().toPath().toAbsolutePath().normalize())) {
+            JOptionPane.showMessageDialog(parent, "Tệp đã có sẵn tại vị trí này.");
+            return;
+        }
+        if (destination.exists()
+                && JOptionPane.showConfirmDialog(parent,
+                "Tệp đã tồn tại. Bạn có muốn ghi đè không?",
+                "Xác nhận ghi đè", JOptionPane.YES_NO_OPTION)
+                != JOptionPane.YES_OPTION) {
+            return;
+        }
+        try {
+            Files.copy(info.getFile().toPath(), destination.toPath(),
+                    StandardCopyOption.REPLACE_EXISTING);
+            JOptionPane.showMessageDialog(parent,
+                    "Đã lưu tệp tại:\n" + destination.getAbsolutePath());
+        } catch (IOException exception) {
+            JOptionPane.showMessageDialog(parent,
+                    "Không thể tải tệp xuống: " + exception.getMessage(),
+                    "Lỗi tải tệp", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     /** Lets the user choose any media item from the current conversation history. */
     public static void chooseAndOpenMedia(Component parent, List<FileInfo> files) {
         if (files == null || files.isEmpty()) {
-            JOptionPane.showMessageDialog(parent, "No media files in this conversation yet.");
+            JOptionPane.showMessageDialog(parent,
+                    "Cuộc trò chuyện chưa có tệp nào.");
             return;
         }
 
@@ -333,13 +385,13 @@ public class MediaManager {
                 JLabel label = (JLabel) super.getListCellRendererComponent(
                         source, value, index, selected, hasFocus);
                 FileInfo info = (FileInfo) value;
-                String caption = info.getFilename() + "  [" + info.getType() + "]"
+                String caption = info.getTypeDisplayName() + ": " + info.getFilename()
                         + "  —  " + info.getSender();
                 if (info.getTime() != null && !info.getTime().trim().isEmpty()) {
                     caption += "  ·  " + info.getTime();
                 }
                 if (info.getFile() == null || !info.getFile().isFile()) {
-                    caption += "  (file unavailable)";
+                    caption += "  (không tìm thấy tệp)";
                 }
                 label.setText(caption);
                 label.setBorder(BorderFactory.createEmptyBorder(7, 9, 7, 9));
@@ -349,7 +401,7 @@ public class MediaManager {
         list.setSelectedIndex(0);
 
         int result = JOptionPane.showConfirmDialog(parent, new JScrollPane(list),
-                "Choose media to open", JOptionPane.OK_CANCEL_OPTION,
+                "Chọn tệp cần mở", JOptionPane.OK_CANCEL_OPTION,
                 JOptionPane.PLAIN_MESSAGE);
         if (result == JOptionPane.OK_OPTION && list.getSelectedValue() != null) {
             openMedia(parent, list.getSelectedValue());
@@ -375,7 +427,7 @@ public class MediaManager {
     private static void showImage(Component parent, FileInfo info) {
         ImageIcon icon = loadThumbnail(info, 700);
         if (icon == null) {
-            JOptionPane.showMessageDialog(parent, "Cannot display this image.");
+            JOptionPane.showMessageDialog(parent, "Không thể hiển thị ảnh này.");
             return;
         }
         SwingUtilities.invokeLater(() -> {

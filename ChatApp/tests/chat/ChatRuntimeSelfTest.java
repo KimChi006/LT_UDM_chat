@@ -21,6 +21,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -119,6 +120,7 @@ public class ChatRuntimeSelfTest {
                         @Override
                         public void onDisconnected() {
                         }
+
                     });
             hoaListener = new MessageListener(hoaSocket, inbox);
             hoaListener.start();
@@ -142,6 +144,7 @@ public class ChatRuntimeSelfTest {
                     messages.size() == 1
                             && "message-while-home-is-open-😀"
                             .equals(messages.get(0).getContent()));
+
         } finally {
             if (chi != null) {
                 chi.close();
@@ -174,6 +177,7 @@ public class ChatRuntimeSelfTest {
         TestClient oldChi = null;
         TestClient chi = null;
         TestClient hoa = null;
+        TestClient newcomer = null;
         try {
             long deadline = System.currentTimeMillis() + 3000;
             while (!server.isRunning() && System.currentTimeMillis() < deadline) {
@@ -187,6 +191,13 @@ public class ChatRuntimeSelfTest {
             chi.login();
             hoa = new TestClient(port, "hoa");
             hoa.login();
+            newcomer = new TestClient(port, "newcomer");
+            newcomer.login();
+            check("new login receives the existing online status snapshot",
+                    newcomer.loginStatuses.stream()
+                            .anyMatch(packet -> packet.contains("\"username\":\"chi\""))
+                            && newcomer.loginStatuses.stream()
+                            .anyMatch(packet -> packet.contains("\"username\":\"hoa\"")));
 
             oldChi.close();
             Thread.sleep(150);
@@ -199,11 +210,36 @@ public class ChatRuntimeSelfTest {
             chi.sendMessage("hoa", "chi-to-hoa");
             check("Chi message reaches Hoa", hoa.awaitMessage("chi-to-hoa"));
 
+            String receiptId = "receipt-" + UUID.randomUUID();
+            chi.sendPacket("{\"type\":\"MESSAGE\",\"sender\":\"chi\","
+                    + "\"receiver\":\"hoa\",\"content\":\"receipt check\","
+                    + "\"messageId\":\"" + receiptId + "\"}");
+            check("receipt test message reaches Hoa",
+                    hoa.awaitPacket("\"type\":\"MESSAGE\"",
+                            "\"messageId\":\"" + receiptId + "\""));
+            hoa.sendPacket("{\"type\":\"DELIVERED\",\"sender\":\"hoa\","
+                    + "\"receiver\":\"chi\",\"messageId\":\"" + receiptId + "\"}");
+            check("delivered receipt reaches Chi",
+                    chi.awaitPacket("\"type\":\"DELIVERED\"",
+                            "\"messageId\":\"" + receiptId + "\""));
+            hoa.sendPacket("{\"type\":\"READ\",\"sender\":\"hoa\","
+                    + "\"receiver\":\"chi\",\"messageId\":\"" + receiptId + "\"}");
+            check("read receipt reaches Chi",
+                    chi.awaitPacket("\"type\":\"READ\"",
+                            "\"messageId\":\"" + receiptId + "\""));
+
             String filename = "runtime-test-" + UUID.randomUUID() + ".txt";
             byte[] content = "media-transfer-check".getBytes(StandardCharsets.UTF_8);
+            File mediaFolder = MediaManager.getFolder(PacketType.FILE);
+            if (!mediaFolder.isDirectory() && !mediaFolder.mkdirs()) {
+                throw new IOException("Cannot create media test folder.");
+            }
+            File mediaFile = new File(mediaFolder, filename);
+            Files.write(mediaFile.toPath(), content);
+            String transferId = UUID.randomUUID().toString();
             String mediaPacket = "{\"type\":\"FILE\",\"sender\":\"hoa\","
                     + "\"receiver\":\"chi\",\"transferid\":\""
-                    + UUID.randomUUID() + "\",\"filename\":\"" + filename
+                    + transferId + "\",\"filename\":\"" + filename
                     + "\",\"filesize\":\"" + content.length
                     + "\",\"totalchunks\":\"1\",\"chunkindex\":\"0\",\"data\":\""
                     + Base64.getEncoder().encodeToString(content) + "\"}";
@@ -211,18 +247,26 @@ public class ChatRuntimeSelfTest {
             String receivedPacket = chi.readPacket("\"type\":\"FILE\"",
                     "\"filename\":\"" + filename + "\"");
             FileInfo receivedFile = null;
+            FileTransferClient transferClient = new FileTransferClient(null, "chi");
             try {
                 if (receivedPacket != null) {
-                    receivedFile = new FileTransferClient(null, "chi")
-                            .receive(receivedPacket, null);
+                    receivedFile = transferClient.receive(receivedPacket, null);
                 }
-                check("media file reaches and is assembled by the receiver",
+                check("matching local media is reused without a second file",
                         receivedFile != null && receivedFile.getFile().isFile()
+                                && filename.equals(receivedFile.getFilename())
+                                && transferId.equals(receivedFile.getTransferId())
                                 && java.util.Arrays.equals(content,
                                 Files.readAllBytes(receivedFile.getFile().toPath())));
+                check("replayed completed transfer is ignored",
+                        receivedPacket != null
+                                && transferClient.receive(receivedPacket, null) == null
+                                && !new File(mediaFile.getParentFile(),
+                                filename.replace(".txt", "_1.txt")).exists());
             } finally {
-                File mediaFile = new File(MediaManager.getFolder(PacketType.FILE), filename);
                 Files.deleteIfExists(mediaFile.toPath());
+                Files.deleteIfExists(new File(mediaFile.getParentFile(),
+                        filename.replace(".txt", "_1.txt")).toPath());
             }
 
             chi.sendPacket("{\"type\":\"GROUP_MESSAGE\",\"sender\":\"chi\","
@@ -239,6 +283,9 @@ public class ChatRuntimeSelfTest {
             }
             if (hoa != null) {
                 hoa.close();
+            }
+            if (newcomer != null) {
+                newcomer.close();
             }
             server.stopServer();
             serverThread.join(2000);
@@ -261,6 +308,7 @@ public class ChatRuntimeSelfTest {
         private final BufferedReader reader;
         private final PrintWriter writer;
         private final String username;
+        private final List<String> loginStatuses = new ArrayList<String>();
 
         TestClient(int port, String username) throws IOException {
             this.username = username;
@@ -274,12 +322,24 @@ public class ChatRuntimeSelfTest {
         void login() throws IOException {
             writer.println("{\"type\":\"LOGIN\",\"username\":\"" + username + "\"}");
             for (int count = 0; count < 2; count++) {
-                String packet = readPacket("\"type\":\"STATUS\"",
-                        "\"username\":\"" + username + "\"");
+                String packet = readLoginStatus();
                 if (packet == null) {
                     throw new IOException("No login acknowledgement for " + username);
                 }
             }
+        }
+
+        private String readLoginStatus() throws IOException {
+            String packet;
+            while ((packet = reader.readLine()) != null) {
+                if (packet.contains("\"type\":\"STATUS\"")) {
+                    loginStatuses.add(packet);
+                    if (packet.contains("\"username\":\"" + username + "\"")) {
+                        return packet;
+                    }
+                }
+            }
+            return null;
         }
 
         void sendMessage(String receiver, String content) {

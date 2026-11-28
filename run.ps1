@@ -8,8 +8,10 @@ $ErrorActionPreference = "Stop"
 $repoRoot = $PSScriptRoot
 $appRoot = Join-Path $repoRoot "ChatApp"
 $sourceRoot = Join-Path $appRoot "src"
-$gsonJar = Join-Path $appRoot "lib\gson-2.14.0.jar"
 $classesDir = Join-Path $appRoot "bin"
+$dependencyJars = @(Get-ChildItem -Path (Join-Path $appRoot "lib") `
+    -Filter "*.jar" -File | ForEach-Object { $_.FullName })
+$dependencyClasspath = $dependencyJars -join [IO.Path]::PathSeparator
 
 if (-not (Get-Command javac -ErrorAction SilentlyContinue)) {
     throw "JDK compiler 'javac' was not found. Install a JDK and add it to PATH."
@@ -17,8 +19,8 @@ if (-not (Get-Command javac -ErrorAction SilentlyContinue)) {
 if (-not (Get-Command java -ErrorAction SilentlyContinue)) {
     throw "Java runtime 'java' was not found. Install a JDK and add it to PATH."
 }
-if (-not (Test-Path $gsonJar -PathType Leaf)) {
-    throw "Gson jar was not found: $gsonJar"
+if ($dependencyJars.Count -eq 0) {
+    throw "No dependency jars were found in ChatApp\lib."
 }
 
 $sourceFiles = @(Get-ChildItem -Path $sourceRoot -Recurse -Filter "*.java" |
@@ -29,7 +31,7 @@ if ($sourceFiles.Count -eq 0) {
 
 New-Item -ItemType Directory -Force -Path $classesDir | Out-Null
 Write-Host "Compiling $($sourceFiles.Count) Java source files..."
-& javac -encoding UTF-8 -cp $gsonJar -d $classesDir @sourceFiles
+& javac -encoding UTF-8 -cp $dependencyClasspath -d $classesDir @sourceFiles
 if ($LASTEXITCODE -ne 0) {
     throw "Java compilation failed with exit code $LASTEXITCODE."
 }
@@ -50,7 +52,7 @@ $mainClass = switch ($Mode) {
 Push-Location $appRoot
 try {
     Write-Host "Starting $mainClass..."
-    & java -cp "$classesDir;$gsonJar" $mainClass
+    & java -cp "$classesDir;$dependencyClasspath" $mainClass
     if ($LASTEXITCODE -ne 0) {
         throw "$mainClass exited with code $LASTEXITCODE."
     }
