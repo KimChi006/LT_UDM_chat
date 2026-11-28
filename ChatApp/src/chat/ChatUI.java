@@ -16,7 +16,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
-public class ChatUI extends JFrame implements MessageListener.PacketHandler {
+public class ChatUI extends JPanel implements MessageListener.PacketHandler {
 
     private final String username;
     private final String receiver;
@@ -26,13 +26,15 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
     private MediaManager mediaManager;
     private final HistoryManager historyManager = HistoryManager.getInstance();
 
-    private JTextPane chatArea;
+    private JPanel messagesPanel;
+    private JScrollPane messageScrollPane;
     private JTextField messageField;
     private JButton sendButton;
     private JButton attachButton;
     private JButton mediaButton;
     private JButton emojiButton;
     private EmojiPickerPopup emojiPicker;
+    private boolean conversationClosed;
 
     public ChatUI(String username, String receiver) {
         this.username = username;
@@ -44,12 +46,7 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
     }
 
     private void initializeUI() {
-        setTitle("Chat - " + username + " with " + receiver);
-        setSize(850, 620);
-        setMinimumSize(new Dimension(700, 500));
-        setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setLocationRelativeTo(null);
-        getContentPane().setBackground(AppTheme.BACKGROUND);
+        setBackground(AppTheme.BACKGROUND);
         setLayout(new BorderLayout());
 
         JPanel header = new JPanel(new BorderLayout());
@@ -64,6 +61,9 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         JLabel subtitle = new JLabel("Cuộc trò chuyện riêng");
         subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         subtitle.setForeground(AppTheme.MUTED);
+        JLabel avatar = new JLabel(new chat.ChatHomeUI.AvatarIcon(receiver, 42));
+        avatar.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 12));
+        header.add(avatar, BorderLayout.WEST);
         JPanel titlePanel = new JPanel(new GridLayout(2, 1, 0, 3));
         titlePanel.setOpaque(false);
         titlePanel.add(title);
@@ -71,13 +71,15 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         header.add(titlePanel, BorderLayout.CENTER);
         add(header, BorderLayout.NORTH);
 
-        chatArea = new JTextPane();
-        AppTheme.styleChatPane(chatArea);
-
-        JScrollPane scrollPane = new JScrollPane(chatArea);
-        scrollPane.setBorder(BorderFactory.createEmptyBorder());
-        scrollPane.getViewport().setBackground(AppTheme.BACKGROUND);
-        add(scrollPane, BorderLayout.CENTER);
+        messagesPanel = new JPanel();
+        messagesPanel.setLayout(new BoxLayout(messagesPanel, BoxLayout.Y_AXIS));
+        messagesPanel.setBackground(AppTheme.CHAT_BACKGROUND);
+        messagesPanel.setBorder(BorderFactory.createEmptyBorder(14, 18, 14, 18));
+        messageScrollPane = new JScrollPane(messagesPanel);
+        messageScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        messageScrollPane.getViewport().setBackground(AppTheme.CHAT_BACKGROUND);
+        messageScrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        add(messageScrollPane, BorderLayout.CENTER);
 
         JPanel inputPanel = new JPanel(new BorderLayout(5, 5));
         inputPanel.setBackground(AppTheme.SURFACE);
@@ -89,8 +91,8 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
         messageField = new JTextField();
         AppTheme.styleTextField(messageField);
         messageField.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 14));
-        sendButton = new JButton("Send");
-        attachButton = new JButton("Attach");
+        sendButton = new JButton("Gửi");
+        attachButton = new JButton("Tệp");
         mediaButton = new JButton("Media (0)");
         emojiButton = new JButton("Emoji");
         attachButton.setEnabled(false);
@@ -127,14 +129,6 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
 
         messageField.addActionListener(e -> sendMessage());
 
-        addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosed(WindowEvent e) {
-                disconnect();
-            }
-        });
-
-        setVisible(true);
     }
 
     private void connectToServer() {
@@ -190,7 +184,8 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
     }
 
     private void showMedia(FileInfo info, String action) {
-        appendMessage(info.getSender() + action + " " + info);
+        String verb = action.contains("sent") ? "Đã gửi: " : "Đã nhận: ";
+        appendChatMessage(info.getSender(), verb + info.getFilename(), info.getTime());
         updateMediaButton();
     }
 
@@ -249,7 +244,7 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
                 DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
         );
 
-        appendMessage(username + " [" + time + "]: " + content);
+        appendChatMessage(username, content, time);
         historyManager.savePrivateMessage(username, receiver, content, time);
 
         if (clearInput) {
@@ -279,11 +274,9 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
                     DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
             );
 
-            String displayMessage = sender + " [" + time + "]: " + content;
-
             historyManager.savePrivateMessage(sender, username, content, time);
 
-            SwingUtilities.invokeLater(() -> appendMessage(displayMessage));
+            SwingUtilities.invokeLater(() -> appendChatMessage(sender, content, time));
         }
     }
 
@@ -299,21 +292,86 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
     }
 
     private void loadHistory() {
-        String text = historyManager.formatHistory(
-                historyManager.getPrivateHistory(username, receiver)
-        );
-
-        if (!text.isEmpty()) {
-            EmojiTextRenderer.append(chatArea, text);
+        for (Message message : historyManager.getPrivateHistory(username, receiver)) {
+            String content = message.getContent();
+            if (message.getFilepath() != null
+                    && !message.getFilepath().trim().isEmpty()) {
+                content = "Tệp: " + content;
+            }
+            appendChatMessage(message.getSender(), content, message.getTime());
         }
         updateMediaButton();
     }
 
     private void appendMessage(String message) {
-        EmojiTextRenderer.append(chatArea, message + "\n");
+        JPanel row = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 4));
+        row.setOpaque(false);
+        JLabel label = new JLabel(message);
+        label.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        label.setForeground(AppTheme.MUTED);
+        row.add(label);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE, row.getPreferredSize().height));
+        messagesPanel.add(row);
+        refreshMessages();
     }
 
-    private void disconnect() {
+    private void appendChatMessage(String sender, String content, String time) {
+        boolean outgoing = sender != null && sender.equalsIgnoreCase(username);
+        Color bubbleColor = outgoing
+                ? new Color(0xDCEBFF) : AppTheme.SURFACE;
+
+        JTextPane text = new JTextPane();
+        text.setEditable(false);
+        text.setOpaque(false);
+        text.setBorder(BorderFactory.createEmptyBorder());
+        text.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        EmojiTextRenderer.append(text, content == null ? "" : content);
+
+        Dimension naturalSize = text.getPreferredSize();
+        int textWidth = Math.max(90, Math.min(380, naturalSize.width));
+        text.setSize(new Dimension(textWidth, 100000));
+        int textHeight = Math.max(22, text.getPreferredSize().height);
+        text.setPreferredSize(new Dimension(textWidth, textHeight));
+
+        MessageBubble bubble = new MessageBubble(bubbleColor);
+        bubble.setLayout(new BorderLayout(0, 4));
+        bubble.add(text, BorderLayout.CENTER);
+        JLabel timestamp = new JLabel(formatTime(time), SwingConstants.RIGHT);
+        timestamp.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        timestamp.setForeground(AppTheme.MUTED);
+        bubble.add(timestamp, BorderLayout.SOUTH);
+
+        JPanel row = new JPanel(new BorderLayout());
+        row.setOpaque(false);
+        row.setBorder(BorderFactory.createEmptyBorder(3, 0, 3, 0));
+        row.add(bubble, outgoing ? BorderLayout.EAST : BorderLayout.WEST);
+        row.setMaximumSize(new Dimension(Integer.MAX_VALUE,
+                Math.max(42, bubble.getPreferredSize().height + 6)));
+        messagesPanel.add(row);
+        refreshMessages();
+    }
+
+    private String formatTime(String time) {
+        if (time == null || time.length() < 16) {
+            return "";
+        }
+        return time.substring(11, 16);
+    }
+
+    private void refreshMessages() {
+        messagesPanel.revalidate();
+        messagesPanel.repaint();
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar scrollbar = messageScrollPane.getVerticalScrollBar();
+            scrollbar.setValue(scrollbar.getMaximum());
+        });
+    }
+
+    public void closeConversation() {
+        if (conversationClosed) {
+            return;
+        }
+        conversationClosed = true;
         if (mediaManager != null) {
             mediaManager.shutdown();
         }
@@ -321,6 +379,31 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
             messageListener.stop();
         } else if (clientSocket != null) {
             clientSocket.close();
+        }
+    }
+
+    public String getReceiver() {
+        return receiver;
+    }
+
+    private static class MessageBubble extends JPanel {
+        private final Color bubbleColor;
+
+        MessageBubble(Color bubbleColor) {
+            this.bubbleColor = bubbleColor;
+            setOpaque(false);
+            setBorder(BorderFactory.createEmptyBorder(9, 13, 7, 13));
+        }
+
+        @Override
+        protected void paintComponent(Graphics graphics) {
+            Graphics2D g = (Graphics2D) graphics.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,
+                    RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(bubbleColor);
+            g.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
+            g.dispose();
+            super.paintComponent(graphics);
         }
     }
 
@@ -415,7 +498,21 @@ public class ChatUI extends JFrame implements MessageListener.PacketHandler {
                 return;
             }
 
-            new ChatUI(username.trim(), receiver.trim());
+            ChatUI chat = new ChatUI(username.trim(), receiver.trim());
+            JFrame frame = new JFrame("Chat - " + username.trim()
+                    + " with " + receiver.trim());
+            frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+            frame.setContentPane(chat);
+            frame.setSize(900, 660);
+            frame.setMinimumSize(new Dimension(700, 500));
+            frame.setLocationRelativeTo(null);
+            frame.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosed(WindowEvent event) {
+                    chat.closeConversation();
+                }
+            });
+            frame.setVisible(true);
         });
     }
 }

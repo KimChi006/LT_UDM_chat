@@ -1,0 +1,16 @@
+[
+  {
+    "username": "chi",
+    "friends": [
+      "hoa"
+    ],
+    "incomingRequests": []
+  },
+  {
+    "username": "hoa",
+    "friends": [
+      "chi"
+    ],
+    "incomingRequests": []
+  }
+]

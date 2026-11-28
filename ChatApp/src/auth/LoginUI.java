@@ -14,6 +14,7 @@ import javax.swing.JPasswordField;
 import javax.swing.SwingConstants;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import javax.swing.BoxLayout;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Dimension;
@@ -21,6 +22,7 @@ import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import javax.swing.Box;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -45,7 +47,7 @@ public class LoginUI extends JFrame {
         passwordField = new JPasswordField(18);
         buildInterface();
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setSize(430, 330);
+        setSize(430, 390);
         setResizable(false);
         setLocationRelativeTo(null);
     }
@@ -53,36 +55,57 @@ public class LoginUI extends JFrame {
     private void buildInterface() {
         JPanel root = new JPanel(new BorderLayout());
         root.setBackground(Color.WHITE);
-        root.setBorder(BorderFactory.createEmptyBorder(20, 35, 20, 35));
+        root.setBorder(BorderFactory.createEmptyBorder(34, 42, 28, 42));
 
-        JLabel title = new JLabel("Welcome back",
-                UIIcons.loadIcon("1f4ac.png", 30), SwingConstants.LEFT);
-        title.setFont(new Font("Segoe UI", Font.BOLD, 24));
-        title.setForeground(new Color(35, 55, 90));
-        title.setIconTextGap(10);
+        JLabel title = new JLabel("UDM Chat");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        title.setForeground(new Color(0x0068FF));
+
+        JLabel subtitle = new JLabel("Chào mừng bạn trở lại");
+        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        subtitle.setForeground(new Color(0x7A8796));
+
+        JPanel heading = new JPanel();
+        heading.setOpaque(false);
+        heading.setLayout(new BoxLayout(heading, BoxLayout.Y_AXIS));
+        heading.add(title);
+        heading.add(Box.createVerticalStrut(6));
+        heading.add(subtitle);
 
         JPanel form = new JPanel(new GridBagLayout());
         form.setBackground(Color.WHITE);
         GridBagConstraints constraints = new GridBagConstraints();
-        constraints.insets = new Insets(8, 5, 8, 5);
+        constraints.insets = new Insets(7, 0, 7, 0);
         constraints.fill = GridBagConstraints.HORIZONTAL;
+        constraints.weightx = 1;
 
         constraints.gridx = 0;
         constraints.gridy = 0;
-        constraints.gridwidth = 2;
-        form.add(title, constraints);
+        constraints.gridwidth = 1;
+        form.add(heading, constraints);
 
         constraints.gridy = 1;
-        constraints.gridwidth = 1;
-        form.add(UIIcons.createLabel("Username", "1f464.png"), constraints);
-        constraints.gridx = 1;
+        JLabel usernameLabel = new JLabel("Tài khoản");
+        usernameLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        usernameLabel.setForeground(new Color(0x1F2D3D));
+        form.add(usernameLabel, constraints);
+
+        constraints.gridy = 2;
         form.add(usernameField, constraints);
 
-        constraints.gridx = 0;
-        constraints.gridy = 2;
-        form.add(UIIcons.createLabel("Password", "1f512.png"), constraints);
-        constraints.gridx = 1;
+        constraints.gridy = 3;
+        JLabel passwordLabel = new JLabel("Mật khẩu");
+        passwordLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        passwordLabel.setForeground(new Color(0x1F2D3D));
+        form.add(passwordLabel, constraints);
+
+        constraints.gridy = 4;
         form.add(passwordField, constraints);
+
+        usernameField.setPreferredSize(new Dimension(300, 42));
+        passwordField.setPreferredSize(new Dimension(300, 42));
+        ui.AppTheme.styleTextField(usernameField);
+        ui.AppTheme.styleTextField(passwordField);
 
         JButton loginButton = createPrimaryButton("Login");
         JButton registerButton = createSecondaryButton("Create account");
@@ -92,7 +115,9 @@ public class LoginUI extends JFrame {
 
         JPanel actions = new JPanel();
         actions.setBackground(Color.WHITE);
+        actions.setBorder(BorderFactory.createEmptyBorder(10, 0, 0, 0));
         actions.add(loginButton);
+        actions.add(javax.swing.Box.createHorizontalStrut(10));
         actions.add(registerButton);
 
         root.add(form, BorderLayout.CENTER);
@@ -102,7 +127,7 @@ public class LoginUI extends JFrame {
 
     private JButton createPrimaryButton(String text) {
         JButton button = new JButton(text);
-        styleButton(button, new Color(58, 108, 217), Color.WHITE);
+        styleButton(button, new Color(0x0068FF), Color.WHITE);
         return button;
     }
 
@@ -113,12 +138,14 @@ public class LoginUI extends JFrame {
     }
 
     private void styleButton(JButton button, Color background, Color foreground) {
-        button.setPreferredSize(new Dimension(145, 38));
+        button.setPreferredSize(new Dimension(145, 42));
         button.setBackground(background);
         button.setForeground(foreground);
         button.setOpaque(true);
-        button.setBorderPainted(false);
+        button.setBorder(new ui.AppTheme.RoundedBorder(background, 10));
         button.setFocusPainted(false);
+        button.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        button.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
     }
 
     private void login() {

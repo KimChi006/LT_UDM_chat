@@ -147,5 +147,34 @@
     "content": "hi",
     "time": "2026-11-28 12:20:23",
     "groupId": "27f50741-5a09-44fe-9692-617bd73b019c"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "chi",
+    "receiver": "hoa",
+    "content": "hi",
+    "time": "2026-11-28 13:13:16"
+  },
+  {
+    "type": "VIDEO",
+    "sender": "chi",
+    "receiver": "hoa",
+    "content": "1128 (2)(1).mp4",
+    "time": "2026-11-28 13:14:36",
+    "filepath": "D:\\CapCut\\1128 (2)(1).mp4"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "chi",
+    "receiver": "hoa",
+    "content": "🐸",
+    "time": "2026-11-28 13:16:57"
+  },
+  {
+    "type": "MESSAGE",
+    "sender": "hoa",
+    "receiver": "chi",
+    "content": "hiiiiiiiiiiiiiii",
+    "time": "2026-11-28 13:32:03"
   }
 ]

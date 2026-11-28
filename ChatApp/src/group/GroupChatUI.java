@@ -51,7 +51,7 @@ public class GroupChatUI extends JFrame implements MessageListener.PacketHandler
 
     private void initializeUI() {
         setTitle("Group Chat - " + group.getGroupName());
-        setSize(960, 660);
+        setSize(980, 680);
         setMinimumSize(new Dimension(760, 520));
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
@@ -124,8 +124,8 @@ public class GroupChatUI extends JFrame implements MessageListener.PacketHandler
         messageField = new JTextField();
         AppTheme.styleTextField(messageField);
         messageField.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 14));
-        sendButton = new JButton("Send");
-        attachButton = new JButton("Attach");
+        sendButton = new JButton("Gửi");
+        attachButton = new JButton("Tệp");
         mediaButton = new JButton("Media (0)");
         emojiButton = new JButton("Emoji");
         attachButton.setEnabled(false);

@@ -13,6 +13,13 @@ import java.awt.Dimension;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.Font;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JLabel;
+import javax.swing.SwingConstants;
+import ui.AppTheme;
 
 public class RegisterUI extends JDialog {
 
@@ -26,16 +33,37 @@ public class RegisterUI extends JDialog {
         passwordField = new JPasswordField(18);
         confirmPasswordField = new JPasswordField(18);
         buildInterface();
-        setSize(380, 260);
+        setSize(430, 330);
         setLocationRelativeTo(owner);
     }
 
     private void buildInterface() {
+        JPanel header = new JPanel();
+        header.setOpaque(false);
+        header.setLayout(new BoxLayout(header, BoxLayout.Y_AXIS));
+        header.setBorder(BorderFactory.createEmptyBorder(18, 20, 8, 20));
+        JLabel title = new JLabel("Tạo tài khoản");
+        title.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        title.setForeground(AppTheme.TEXT);
+        JLabel subtitle = new JLabel("Tham gia không gian trò chuyện UDM");
+        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitle.setForeground(AppTheme.MUTED);
+        header.add(title);
+        header.add(Box.createVerticalStrut(5));
+        header.add(subtitle);
+
         JPanel form = new JPanel(new GridBagLayout());
         form.setBackground(Color.WHITE);
+        form.setBorder(BorderFactory.createEmptyBorder(8, 20, 8, 20));
         GridBagConstraints constraints = new GridBagConstraints();
         constraints.insets = new Insets(8, 10, 8, 10);
         constraints.fill = GridBagConstraints.HORIZONTAL;
+        usernameField.setPreferredSize(new Dimension(220, 40));
+        passwordField.setPreferredSize(new Dimension(220, 40));
+        confirmPasswordField.setPreferredSize(new Dimension(220, 40));
+        AppTheme.styleTextField(usernameField);
+        AppTheme.styleTextField(passwordField);
+        AppTheme.styleTextField(confirmPasswordField);
 
         addLabel(form, "Username", "1f464.png", 0, constraints);
         constraints.gridx = 1;
@@ -54,12 +82,13 @@ public class RegisterUI extends JDialog {
         form.add(confirmPasswordField, constraints);
 
         JButton registerButton = createPrimaryButton("Register");
-        registerButton.setIcon(UIIcons.loadIcon("2795.png"));
         registerButton.addActionListener(event -> register());
         JPanel actions = new JPanel();
         actions.setBackground(Color.WHITE);
+        actions.setBorder(BorderFactory.createEmptyBorder(4, 20, 16, 20));
         actions.add(registerButton);
 
+        add(header, BorderLayout.NORTH);
         add(form, BorderLayout.CENTER);
         add(actions, BorderLayout.SOUTH);
     }
@@ -73,12 +102,8 @@ public class RegisterUI extends JDialog {
 
     private JButton createPrimaryButton(String text) {
         JButton button = new JButton(text);
-        button.setPreferredSize(new Dimension(140, 38));
-        button.setForeground(Color.WHITE);
-        button.setBackground(new Color(58, 108, 217));
-        button.setOpaque(true);
-        button.setBorderPainted(false);
-        button.setFocusPainted(false);
+        AppTheme.styleButton(button, true);
+        button.setPreferredSize(new Dimension(160, 42));
         return button;
     }
 
